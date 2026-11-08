@@ -32,7 +32,7 @@ Native Android TV Jellyfin client (Kotlin, Compose for TV, Media3, Jellyfin SDK 
 - Artwork pages use `GlassBackdrop`: sharp art on the right dissolving into a blurred, tinted copy under the text on the left (no dark gradients). Panels over art use `GlassPanelBackground`. Controls are pills (`ButtonShape`), cards are 14 dp rounded (`CardShape`).
 - Logo sources with transparency are in `assets/` (`finmax_logo_black.png`, `finmax_logo_small_black.png`); the res/ wordmark, mark, banner and launcher icons are generated from them.
 - Popovers (pickers, track menus) use `Popover`/`PopoverItem` with `Modifier.popoverBlur(open)` on the page behind: no container, a progressive blur and tint toward the right edge. Popovers take focus themselves.
-- Home: spotlight on top (Left/Right at the button ends pages titles), rows always peeking below; entering the rows makes the backdrop and info follow the focused card. Horizontal rows use `rememberEdgeScroll()` so the first card returns to its start padding.
+- Home (owner's preferred version): vertical spotlight carousel (Up/Down) with text on the left; Right from the last button opens the numbered list on frosted glass. A rows-based Home was tried in 8ba7f17 and reverted at the owner's request. Horizontal rows elsewhere use `rememberEdgeScroll()` so the first card returns to its start padding.
 - Details page scrolling is explicit (`NoAutoScroll` on the column, sections snap by key order, rows inside use `MinimalScroll`).
 - `AmbientVideo` (details background) must stay a `TextureView` that is never focusable, and must only hold a player while its page is the top of the back stack, so it never competes with the real player for the decoder.
 

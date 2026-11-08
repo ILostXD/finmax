@@ -230,7 +230,7 @@ class DesignScreenshots {
         sections.add(HomeSection(0, "resume", "Continue Watching", listOf(lastLaugh.withProgress(42.0), item("The Glass Orchard", progress = 70.0), item("Low Tide", progress = 15.0))))
         sections.add(HomeSection(1, "nextup", "Next Up", listOf(episode("Night Shift", 2, 4, "The Long Hallway"), episode("Copperline", 1, 7, "Signal Fires"))))
         sections.add(HomeSection(10, "latest", "New in Movies", listOf(sandborne, item("Paper Satellites"), item("Kingfisher"), item("A Room Upstairs"))))
-        this.inRows = exploring
+        this.exploring = exploring
         if (exploring) {
             focused = lastLaugh
             focusedSection = "Continue Watching"
