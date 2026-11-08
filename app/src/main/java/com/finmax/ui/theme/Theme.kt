@@ -52,35 +52,44 @@ object Fm {
     val CardGap = 16.dp
 }
 
+/**
+ * Bricolage Grotesque (variable: optical size 12–96, width 75–100, weight 200–800), the typeface of
+ * the finmax logo. The logo sits around weight 600, so titles are built from 600 rather than the
+ * heaviest cut. Optical size follows the role: display masters for titles, text masters for reading.
+ */
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
-private fun archivo(weight: Int, width: Float) = Font(
-    R.font.archivo,
+private fun bricolage(weight: Int, opticalSize: Float) = Font(
+    R.font.bricolage_grotesque,
     weight = FontWeight(weight),
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight), FontVariation.width(width)),
+    variationSettings = FontVariation.Settings(
+        FontVariation.weight(weight),
+        FontVariation.Setting("opsz", opticalSize),
+        FontVariation.width(100f),
+    ),
 )
 
-/** Archivo at normal width for reading text. */
-val BodyFont = FontFamily(archivo(400, 100f), archivo(500, 100f), archivo(600, 100f), archivo(700, 100f))
+/** Text optical size for reading. */
+val BodyFont = FontFamily(bricolage(400, 14f), bricolage(500, 14f), bricolage(600, 14f), bricolage(700, 14f))
 
-/** Archivo Expanded, heavy: titles and big numbers (the editorial look of the reference art). */
-val DisplayFont = FontFamily(archivo(600, 125f), archivo(700, 125f), archivo(800, 125f), archivo(900, 125f))
+/** Display optical size (the logo's look): titles and big numbers. */
+val DisplayFont = FontFamily(bricolage(500, 96f), bricolage(600, 96f), bricolage(700, 96f), bricolage(800, 96f))
 
-/** Semi-expanded Archivo for buttons and tracked uppercase overlines. */
-val WideFont = FontFamily(archivo(500, 112f), archivo(600, 112f), archivo(700, 112f))
+/** Small-size masters for buttons and tracked uppercase overlines. */
+val WideFont = FontFamily(bricolage(500, 12f), bricolage(600, 12f), bricolage(700, 12f))
 
 private val typography = Typography(
-    displayLarge = TextStyle(fontFamily = DisplayFont, fontSize = 54.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp, lineHeight = 56.sp),
-    displayMedium = TextStyle(fontFamily = DisplayFont, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp, lineHeight = 42.sp),
-    displaySmall = TextStyle(fontFamily = DisplayFont, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp),
-    headlineMedium = TextStyle(fontFamily = DisplayFont, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp),
-    headlineSmall = TextStyle(fontFamily = DisplayFont, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp),
-    titleLarge = TextStyle(fontFamily = BodyFont, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp),
+    displayLarge = TextStyle(fontFamily = DisplayFont, fontSize = 56.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.2).sp, lineHeight = 56.sp),
+    displayMedium = TextStyle(fontFamily = DisplayFont, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.8).sp, lineHeight = 42.sp),
+    displaySmall = TextStyle(fontFamily = DisplayFont, fontSize = 31.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp, lineHeight = 34.sp),
+    headlineMedium = TextStyle(fontFamily = DisplayFont, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp, lineHeight = 30.sp),
+    headlineSmall = TextStyle(fontFamily = DisplayFont, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp, lineHeight = 26.sp),
+    titleLarge = TextStyle(fontFamily = BodyFont, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp),
     titleMedium = TextStyle(fontFamily = BodyFont, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, lineHeight = 22.sp),
     titleSmall = TextStyle(fontFamily = BodyFont, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp),
     bodyLarge = TextStyle(fontFamily = BodyFont, fontSize = 15.sp, fontWeight = FontWeight.Normal, lineHeight = 23.sp),
     bodyMedium = TextStyle(fontFamily = BodyFont, fontSize = 13.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp),
     bodySmall = TextStyle(fontFamily = BodyFont, fontSize = 12.sp, fontWeight = FontWeight.Normal, lineHeight = 17.sp),
-    labelLarge = TextStyle(fontFamily = WideFont, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
+    labelLarge = TextStyle(fontFamily = WideFont, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp),
     labelMedium = TextStyle(fontFamily = BodyFont, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.2.sp),
     labelSmall = TextStyle(fontFamily = WideFont, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp),
 )
