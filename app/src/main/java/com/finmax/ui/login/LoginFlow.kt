@@ -368,7 +368,7 @@ fun FmTextField(
     LaunchedEffect(editing) {
         if (editing) { delay(30); runCatching { fieldReq.requestFocus() } }
     }
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(percent = 50)
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = if (focused || editing) Fm.Accent else Fm.TextDim)
         Spacer(Modifier.height(6.dp))

@@ -8,7 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import com.finmax.ui.components.AmbientVideo
-import com.finmax.ui.components.BackdropScrim
+import com.finmax.ui.components.GlassBackdrop
+import com.finmax.ui.components.NoAutoScroll
+import com.finmax.ui.components.MinimalScroll
 import com.finmax.ui.components.GhostButton
 import com.finmax.ui.components.Hairline
 import com.finmax.ui.components.IconButton
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -164,9 +167,7 @@ fun DetailScreen(id: UUID) {
     }
 }
 
-private val PanelW = 236.dp
-
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository) {
     val nav = LocalNav.current
@@ -177,84 +178,64 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
     val scope = rememberCoroutineScope()
     val cast = item.people.orEmpty().filter { it.type == PersonKind.ACTOR }.take(24)
 
-    // Sections below the header, numbered like the reference art ("02 Cast").
-    val sections = buildList {
-        add("Overview")
-        if (isSeries && state.seasons.isNotEmpty()) add("Episodes")
-        if (state.children.isNotEmpty()) add("In this collection")
-        if (cast.isNotEmpty()) add("Cast")
-        if (state.similar.isNotEmpty()) add("More like this")
-        if (isPlayable) add("File")
-    }
-    fun indexOf(name: String) = sections.indexOf(name) + 1
-
     val scrolled by remember {
         androidx.compose.runtime.derivedStateOf { state.list.firstVisibleItemIndex > 0 || state.list.firstVisibleItemScrollOffset > 160 }
     }
-    // Sections below the header snap to the top when they take focus, so nothing sits half cut off.
-    fun Modifier.snapOnFocus(key: String) = onFocusChanged { f ->
-        if (f.hasFocus) scope.launch {
-            state.list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.let { state.list.animateScrollToItem(it.index) }
-        }
+    // The page positions itself: the header snaps back to the very top, each section snaps to the
+    // top edge when it takes focus (the last ones as far as they go, keeping the bottom margin).
+    // Item order of the list below; sections scrolled off screen aren't in the layout info, so
+    // positions come from here.
+    val keys = buildList {
+        add("head")
+        if (isSeries && state.seasons.isNotEmpty()) add("seasons")
+        if (state.children.isNotEmpty()) add("children")
+        if (cast.isNotEmpty()) add("cast")
+        if (state.similar.isNotEmpty()) add("similar")
     }
-    val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.72f else 0f, androidx.compose.animation.core.tween(500), label = "dim")
+    fun Modifier.snapOnFocus(key: String) = onFocusChanged { f ->
+        if (f.hasFocus) scope.launch { state.list.animateScrollToItem(keys.indexOf(key).coerceAtLeast(0)) }
+    }
+    val screenHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.55f else 0f, androidx.compose.animation.core.tween(500), label = "dim")
 
     Box(Modifier.fillMaxSize().background(Fm.Bg)) {
-        // Artwork first; trailer or film clips fade in over it once the page has settled.
-        Box(Modifier.fillMaxSize()) {
-            AsyncImage(repo.backdrop(item), null, contentScale = ContentScale.Crop, alignment = Alignment.TopEnd, modifier = Modifier.fillMaxSize())
-            AmbientVideo(item, playing = !scrolled && !tracksOpen)
-            BackdropScrim(textSide = Alignment.Start)
-            Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = dim)))
-        }
-        @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.finmax.ui.components.MinimalScroll) {
-        LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 60.dp), modifier = Modifier.fillMaxSize()) {
+        GlassBackdrop(
+            repo.backdrop(item), soft = repo.backdrop(item, 320), dim = dim,
+            sharp = { AmbientVideo(item, playing = !scrolled && !tracksOpen) },
+        )
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
+        LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
             item(key = "head") {
-                Box(
-                    Modifier.fillParentMaxHeight().fillMaxWidth().onFocusChanged {
-                        if (it.hasFocus) scope.launch { state.list.animateScrollToItem(0) }
-                    },
+                Column(
+                    Modifier.height(screenHeight).fillMaxWidth()
+                        .padding(start = Fm.SafeH, end = Fm.SafeH, top = Fm.SafeV, bottom = 24.dp)
+                        .onFocusChanged { if (it.hasFocus) scope.launch { state.list.animateScrollToItem(0) } },
                 ) {
-                    SectionRail(sections.size, Modifier.align(Alignment.CenterStart).padding(start = 22.dp))
-                    Header(item, Modifier.align(Alignment.TopStart).padding(start = Fm.SafeH, top = Fm.SafeV + 6.dp))
-                    Column(Modifier.align(Alignment.CenterStart).padding(start = Fm.SafeH, top = 30.dp).width(470.dp)) {
-                        TitleBlock(item, repo)
-                        Spacer(Modifier.height(24.dp))
-                        Actions(item, state, playTarget, isSeries, isPlayable, onTracks = { tracksOpen = true }, onEpisodes = {
-                            scope.launch { state.list.animateScrollToItem(1) }
-                        })
-                        playTarget?.progress?.let { p ->
-                            val resumeTicks = playTarget.userData?.playbackPositionTicks ?: 0
-                            Row(Modifier.padding(top = 14.dp).width(320.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.weight(1f).clip(CircleShape)) { ProgressStripe(p) }
-                                val left = ((playTarget.runTimeTicks ?: 0) - resumeTicks) / 10_000
-                                Text("  ${formatRuntime(left)} left", style = MaterialTheme.typography.labelMedium, color = Fm.TextDim)
-                            }
+                    Header(item)
+                    Spacer(Modifier.weight(1f))
+                    TitleBlock(item, repo, cast.take(3).mapNotNull { it.name })
+                    Spacer(Modifier.height(20.dp))
+                    Actions(item, state, playTarget, isSeries, isPlayable, onTracks = { tracksOpen = true }, onEpisodes = {
+                        scope.launch { state.list.animateScrollToItem(1) }
+                    })
+                    playTarget?.progress?.let { p ->
+                        val resumeTicks = playTarget.userData?.playbackPositionTicks ?: 0
+                        Row(Modifier.padding(top = 16.dp).width(340.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f).clip(CircleShape)) { ProgressStripe(p) }
+                            val left = ((playTarget.runTimeTicks ?: 0) - resumeTicks) / 10_000
+                            Text("  ${formatRuntime(left)} left", style = MaterialTheme.typography.labelMedium, color = Fm.TextDim)
                         }
                     }
-                    if (cast.isNotEmpty()) {
-                        Column(Modifier.align(Alignment.BottomStart).padding(start = Fm.SafeH, bottom = 30.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("%02d".format(indexOf("Cast")), style = MaterialTheme.typography.labelSmall, color = Fm.Accent)
-                                Overline("Starring", color = Fm.TextDim)
-                            }
-                            Text(
-                                cast.take(3).mapNotNull { it.name }.joinToString("   ·   "),
-                                style = MaterialTheme.typography.titleSmall, color = Fm.Text, modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                    }
-                    FactPanel(item, state, repo, Modifier.align(Alignment.TopEnd))
+                    Spacer(Modifier.weight(0.6f))
                 }
             }
             if (isSeries && state.seasons.isNotEmpty()) {
                 item(key = "seasons") {
-                    Column(Modifier.snapOnFocus("seasons")) {
-                        SectionTitle("Episodes", index = indexOf("Episodes"))
+                    Section(Modifier.snapOnFocus("seasons")) {
+                        SectionTitle("Episodes")
                         LazyRow(
                             contentPadding = PaddingValues(start = Fm.SafeH - 10.dp, end = Fm.SafeH, top = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.focusRestorer(),
                         ) {
                             items(state.seasons, key = { it.id }) { s ->
@@ -279,16 +260,16 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (state.children.isNotEmpty()) {
                 item(key = "children") {
-                    Column(Modifier.snapOnFocus("children")) {
-                        SectionTitle("In this collection", index = indexOf("In this collection"))
+                    Section(Modifier.snapOnFocus("children")) {
+                        SectionTitle("In this collection")
                         MediaRow("", state.children, CardStyle.POSTER, "children", onOpen = { nav.open(it) }, showTitle = false)
                     }
                 }
             }
             if (cast.isNotEmpty()) {
                 item(key = "cast") {
-                    Column(Modifier.snapOnFocus("cast")) {
-                        SectionTitle("Cast", index = indexOf("Cast"))
+                    Section(Modifier.snapOnFocus("cast")) {
+                        SectionTitle("Cast")
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
                             horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
@@ -301,13 +282,12 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (state.similar.isNotEmpty()) {
                 item(key = "similar") {
-                    Column(Modifier.snapOnFocus("similar")) {
-                        SectionTitle("More like this", index = indexOf("More like this"))
+                    Section(Modifier.snapOnFocus("similar")) {
+                        SectionTitle("More like this")
                         MediaRow("", state.similar, CardStyle.POSTER, "similar", onOpen = { nav.open(it) }, showTitle = false)
                     }
                 }
             }
-            if (isPlayable) item(key = "tech") { TechInfo(item, indexOf("File")) }
         }
         }
         if (tracksOpen) {
@@ -317,12 +297,21 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
     }
 }
 
+/** A section below the header. Rows inside scroll themselves sideways only as far as needed. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun Section(modifier: Modifier, content: @Composable () -> Unit) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides MinimalScroll) {
+        Column(modifier) { content() }
+    }
+}
+
 /** Wordmark and a "MOVIES / DRAMA" breadcrumb across the top of the header. */
 @Composable
 private fun Header(item: BaseItemDto, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Wordmark(18.dp)
-        Spacer(Modifier.width(28.dp))
+    Row(modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        Wordmark(20.dp)
+        Spacer(Modifier.width(26.dp))
         val crumbs = listOfNotNull(
             when (item.type) {
                 BaseItemKind.MOVIE -> "Movies"
@@ -336,45 +325,81 @@ private fun Header(item: BaseItemDto, modifier: Modifier = Modifier) {
     }
 }
 
-/** The thin line with a dot per section that runs down the left edge. */
 @Composable
-private fun SectionRail(count: Int, modifier: Modifier = Modifier) {
-    Column(modifier.height(300.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Hairline(Modifier.weight(1f), vertical = true, alpha = 0.22f)
-        repeat(count) { i ->
-            Box(
-                Modifier.padding(vertical = 7.dp).size(if (i == 0) 6.dp else 4.dp).clip(CircleShape)
-                    .background(if (i == 0) Fm.Accent else Fm.Parchment.copy(alpha = 0.45f)),
-            )
+private fun TitleBlock(item: BaseItemDto, repo: MediaRepository, starring: List<String>) {
+    val logo = remember(item.id) { if (item.type == BaseItemKind.EPISODE) null else repo.logo(item) }
+    Column(Modifier.width(600.dp)) {
+        if (item.type == BaseItemKind.EPISODE) {
+            Overline(listOfNotNull(item.seriesName, item.episodeLabel()).joinToString("  ·  "))
+            Spacer(Modifier.height(8.dp))
         }
-        Hairline(Modifier.weight(1f), vertical = true, alpha = 0.22f)
+        if (logo != null) {
+            AsyncImage(logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart, modifier = Modifier.height(104.dp).width(420.dp))
+        } else {
+            BigTitle(item.name ?: "", maxLines = 2)
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            RatingLine(item)
+            endsAt(item)?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.TextDim) }
+            techBadges(item).forEach { Badge(it) }
+        }
+        item.taglines?.firstOrNull()?.let {
+            Text(it, style = MaterialTheme.typography.titleMedium, color = Fm.Text, modifier = Modifier.padding(top = 12.dp))
+        }
+        Text(
+            item.overview ?: "", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,
+            maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp).width(560.dp),
+        )
+        Facts(item, starring, Modifier.padding(top = 14.dp))
     }
 }
 
+/** "ends 20:12" for anything with a runtime, counting from the resume point. */
+private fun endsAt(item: BaseItemDto): String? {
+    val runtimeMs = (item.runTimeTicks ?: 0) / 10_000
+    if (runtimeMs < 60_000 || item.type == BaseItemKind.SERIES) return null
+    val left = runtimeMs - (item.userData?.playbackPositionTicks ?: 0) / 10_000
+    return "ends " + java.time.LocalTime.now().plusSeconds(left / 1000)
+        .format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+}
+
+/** Compact label/value facts that used to live in the side column. */
 @Composable
-private fun TitleBlock(item: BaseItemDto, repo: MediaRepository) {
-    val logo = remember(item.id) { if (item.type == BaseItemKind.EPISODE) null else repo.logo(item) }
-    if (item.type == BaseItemKind.EPISODE) {
-        Overline(listOfNotNull(item.seriesName, item.episodeLabel()).joinToString("  ·  "))
-        Spacer(Modifier.height(8.dp))
+private fun Facts(item: BaseItemDto, starring: List<String>, modifier: Modifier = Modifier) {
+    val people = item.people.orEmpty()
+    fun names(kind: PersonKind, n: Int = 2) = people.filter { it.type == kind }.mapNotNull { it.name }.distinct().take(n).joinToString(", ").takeIf { it.isNotEmpty() }
+    val top = listOfNotNull(
+        when (item.type) {
+            BaseItemKind.SERIES -> item.productionYear?.let { y ->
+                val end = if (item.status == "Continuing") "present" else item.endDate?.year?.takeIf { it != y }?.toString()
+                "Years" to listOfNotNull(y.toString(), end).joinToString(" – ")
+            }
+            BaseItemKind.EPISODE -> item.premiereDate?.let { "Aired" to it.format(longDate) }
+            else -> item.premiereDate?.format(longDate)?.let { "Premiere" to it }
+        },
+        names(PersonKind.DIRECTOR)?.let { "Director" to it },
+        names(PersonKind.WRITER)?.let { "Written by" to it },
+        item.studios?.firstOrNull()?.name?.let { (if (item.type == BaseItemKind.SERIES) "Network" else "Studio") to it },
+    ).take(3)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (top.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                top.forEach { (label, value) ->
+                    Column(Modifier.widthIn(max = 200.dp)) {
+                        Overline(label)
+                        Text(value, style = MaterialTheme.typography.bodySmall, color = Fm.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        if (starring.isNotEmpty()) {
+            Column {
+                Overline("Starring")
+                Text(starring.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall, color = Fm.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
-    if (logo != null) {
-        AsyncImage(logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart, modifier = Modifier.height(116.dp).width(430.dp))
-    } else {
-        BigTitle(item.name ?: "", maxLines = 3)
-    }
-    Spacer(Modifier.height(14.dp))
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        RatingLine(item)
-        techBadges(item).forEach { Badge(it) }
-    }
-    item.taglines?.firstOrNull()?.let {
-        Text(it, style = MaterialTheme.typography.titleMedium, color = Fm.Text, modifier = Modifier.padding(top = 14.dp))
-    }
-    Text(
-        item.overview ?: "", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,
-        maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp).width(420.dp),
-    )
 }
 
 @Composable
@@ -389,10 +414,7 @@ private fun Actions(
 ) {
     val nav = LocalNav.current
     val resumeTicks = playTarget?.userData?.playbackPositionTicks ?: 0
-    Row(
-        Modifier.wrapContentWidth(Alignment.Start, unbounded = true), // may extend past the text column so all actions fit
-        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (playTarget != null) {
             val label = buildString {
                 append(if (resumeTicks > 0) "Resume" else "Play")
@@ -407,8 +429,11 @@ private fun Actions(
             if (resumeTicks > 0) {
                 GhostButton("From start", {
                     nav.push(Route.Player(playTarget.id, true, state.mediaSourceId, state.audioIndex, state.subtitleIndex))
-                }, icon = Icons.Filled.Replay)
+                }, icon = Icons.Filled.Replay, modifier = Modifier.focusMemory("fromstart"))
             }
+        }
+        state.trailer?.let { t ->
+            GhostButton("Trailer", { nav.push(Route.Player(t.id, fromStart = true)) }, icon = Icons.Filled.PlayArrow, modifier = Modifier.focusMemory("trailer"))
         }
         if (isSeries && state.seasons.isNotEmpty()) GhostButton("Episodes", onEpisodes, arrow = true)
         if (item.type == BaseItemKind.EPISODE && item.seriesId != null) {
@@ -427,64 +452,6 @@ private fun Actions(
                 Icons.Filled.DoneAll, if (state.played) "Watched" else "Mark watched", { state.togglePlayed() },
                 Modifier.focusMemory("played"), active = state.played,
             )
-        }
-    }
-}
-
-/** Glass column of facts on the right ("PREMIERE / DIRECTOR / MUSIC BY / GENRE"), trailer tile at the foot. */
-@Composable
-private fun FactPanel(item: BaseItemDto, state: DetailState, repo: MediaRepository, modifier: Modifier = Modifier) {
-    val people = item.people.orEmpty()
-    fun names(kind: PersonKind, n: Int = 2) = people.filter { it.type == kind }.mapNotNull { it.name }.distinct().take(n).joinToString(", ").takeIf { it.isNotEmpty() }
-    val runtimeMs = (item.runTimeTicks ?: 0) / 10_000
-    val facts = listOfNotNull(
-        when (item.type) {
-            BaseItemKind.SERIES -> item.productionYear?.let { y ->
-                val end = if (item.status == "Continuing") "present" else item.endDate?.year?.takeIf { it != y }?.toString()
-                "Years" to listOfNotNull(y.toString(), end).joinToString(" – ")
-            }
-            BaseItemKind.EPISODE -> item.premiereDate?.let { "Aired" to it.format(longDate) }
-            else -> (item.premiereDate?.format(longDate) ?: item.productionYear?.toString())?.let { "Premiere" to it }
-        },
-        names(PersonKind.DIRECTOR)?.let { "Director" to it },
-        names(PersonKind.WRITER)?.let { "Written by" to it },
-        names(PersonKind.COMPOSER, 1)?.let { "Music by" to it },
-        item.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotEmpty() }?.let { "Genre" to it },
-        item.studios?.firstOrNull()?.name?.let { (if (item.type == BaseItemKind.SERIES) "Network" else "Studio") to it },
-        runtimeMs.takeIf { it > 60_000 && item.type != BaseItemKind.SERIES }?.let {
-            val left = it - (item.userData?.playbackPositionTicks ?: 0) / 10_000
-            val ends = java.time.LocalTime.now().plusSeconds(left / 1000).format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
-            "Runtime" to "${formatRuntime(it)}  ·  ends $ends"
-        },
-        item.criticRating?.let { "Critics" to "$it%" },
-    ).take(6)
-    val nav = LocalNav.current
-    Row(modifier.width(PanelW).fillMaxHeight()) {
-        Hairline(vertical = true, alpha = 0.16f)
-        Column(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Fm.Void.copy(alpha = 0.42f), Fm.Bg.copy(alpha = 0.62f))))
-                .padding(start = 24.dp, end = 30.dp, top = Fm.SafeV + 52.dp, bottom = 30.dp),
-        ) {
-            facts.forEach { (label, value) ->
-                Overline(label)
-                Text(value, style = MaterialTheme.typography.bodyMedium, color = Fm.Text, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp, bottom = 14.dp))
-            }
-            Spacer(Modifier.weight(1f))
-            state.trailer?.let { t ->
-                FocusTile(
-                    onClick = { nav.push(Route.Player(t.id, fromStart = true)) },
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).focusMemory("trailer"),
-                ) {
-                    AsyncImage(repo.landscape(item, 480), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.45f)))
-                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.size(30.dp).clip(CircleShape).background(Fm.Parchment), contentAlignment = Alignment.Center) {
-                            androidx.tv.material3.Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp), tint = Fm.OnFocus)
-                        }
-                        Overline("Watch trailer", color = Fm.Parchment)
-                    }
-                }
-            }
         }
     }
 }
@@ -553,21 +520,6 @@ private fun techBadges(item: BaseItemDto): List<String> {
         "CC".takeIf { item.mediaStreams?.any { it.type == MediaStreamType.SUBTITLE } == true },
         item.mediaSourceCount?.takeIf { it > 1 }?.let { "$it versions" },
     )
-}
-
-@Composable
-private fun TechInfo(item: BaseItemDto, index: Int) {
-    val source = item.mediaSources?.firstOrNull() ?: return
-    Column(Modifier.padding(top = 10.dp, end = 300.dp)) {
-        SectionTitle("File", index = index)
-        Text(source.path?.substringAfterLast('/')?.substringAfterLast('\\') ?: source.name ?: "", style = MaterialTheme.typography.bodyMedium, color = Fm.TextFaint, modifier = Modifier.padding(start = Fm.SafeH, top = 10.dp))
-        source.mediaStreams.orEmpty().filter { it.type in setOf(MediaStreamType.VIDEO, MediaStreamType.AUDIO, MediaStreamType.SUBTITLE) }.take(14).forEach {
-            Text(
-                "${it.type.serialName}: ${it.displayTitle ?: it.codec}",
-                style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim, modifier = Modifier.padding(start = Fm.SafeH),
-            )
-        }
-    }
 }
 
 @Composable

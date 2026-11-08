@@ -34,6 +34,7 @@ data class AppSettings(
     val homeCollections: Boolean = true,
     val homeGenres: Boolean = true,
     val bazarrUrl: String = "",
+    val seerrUrl: String = "",
     val detailVideo: DetailVideo = DetailVideo.CLIPS,
     val detailVideoSound: Boolean = false,
 )
@@ -44,6 +45,10 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
     private val _state = MutableStateFlow(load())
     val state: StateFlow<AppSettings> = _state.asStateFlow()
     val current get() = _state.value
+
+    var seerrApiKey: String?
+        get() = secure.get("seerr_key")
+        set(value) = secure.put("seerr_key", value?.takeIf { it.isNotBlank() })
 
     var bazarrApiKey: String?
         get() = secure.get("bazarr_key")
@@ -72,6 +77,7 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             .putBoolean("hColl", s.homeCollections)
             .putBoolean("hGenres", s.homeGenres)
             .putString("bazarrUrl", s.bazarrUrl)
+            .putString("seerrUrl", s.seerrUrl)
             .putString("detailVideo", s.detailVideo.name)
             .putBoolean("detailVideoSound", s.detailVideoSound)
             .apply()
@@ -101,6 +107,7 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             homeCollections = prefs.getBoolean("hColl", d.homeCollections),
             homeGenres = prefs.getBoolean("hGenres", d.homeGenres),
             bazarrUrl = prefs.getString("bazarrUrl", d.bazarrUrl)!!,
+            seerrUrl = prefs.getString("seerrUrl", d.seerrUrl)!!,
             detailVideo = runCatching { DetailVideo.valueOf(prefs.getString("detailVideo", d.detailVideo.name)!!) }.getOrDefault(d.detailVideo),
             detailVideoSound = prefs.getBoolean("detailVideoSound", d.detailVideoSound),
         )

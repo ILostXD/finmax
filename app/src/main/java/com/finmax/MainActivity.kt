@@ -27,7 +27,7 @@ import com.finmax.ui.Route
 import com.finmax.ui.detail.DetailScreen
 import com.finmax.ui.home.HomeScreen
 import com.finmax.ui.library.BrowseScreen
-import com.finmax.ui.library.LibrariesScreen
+import com.finmax.ui.discover.DiscoverScreen
 import com.finmax.ui.login.LoginFlow
 import com.finmax.ui.login.ProfilesScreen
 import com.finmax.ui.player.PlayerScreen
@@ -80,7 +80,7 @@ internal fun MainNavigation(nav: Navigator = remember { Navigator() }) {
                     Route.Movies -> BrowseScreen.Movies()
                     Route.Shows -> BrowseScreen.Shows()
                     Route.MyList -> BrowseScreen.MyList()
-                    Route.Libraries -> LibrariesScreen()
+                    Route.Discover -> DiscoverScreen()
                     Route.Search -> SearchScreen()
                     Route.Settings -> SettingsScreen()
                     Route.Profiles -> ProfilesScreen()

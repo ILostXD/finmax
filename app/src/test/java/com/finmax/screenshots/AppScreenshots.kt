@@ -148,7 +148,7 @@ class AppScreenshots {
         key(Key.Back)
         go(nav, Route.Shows); shot("21-shows")
         go(nav, Route.MyList); shot("22-my-list")
-        go(nav, Route.Libraries); shot("23-libraries")
+        go(nav, Route.Discover); shot("23-discover")
         go(nav, Route.Genre("Drama", lib.moviesView.id)); shot("24-genre")
         go(nav, Route.Library(lib.collectionsView.id, "Collections", lib.collectionsView.collectionType)); shot("25-collections")
         go(nav, Route.Search); shot("26-search")

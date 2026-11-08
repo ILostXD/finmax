@@ -13,7 +13,7 @@ sealed interface Route {
     data object Shows : Tab
     data object MyList : Tab
     data object Search : Tab
-    data object Libraries : Tab
+    data object Discover : Tab
     data object Settings : Tab
 
     data class Library(val id: UUID, val name: String, val type: org.jellyfin.sdk.model.api.CollectionType? = null) : Route

@@ -45,7 +45,7 @@ import com.finmax.ui.theme.Fm
 
 /** The finmax wordmark (brand art in res/drawable-nodpi), tinted parchment by default. */
 @Composable
-fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier, gradient: Boolean = false, tint: Color = Fm.Parchment) {
+fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier, gradient: Boolean = false, tint: Color = Fm.Mist) {
     Image(
         painterResource(if (gradient) R.drawable.finmax_wordmark_gradient else R.drawable.finmax_wordmark),
         contentDescription = "finmax",
@@ -59,27 +59,27 @@ private val tabs = listOf(
     Route.Movies to "Movies",
     Route.Shows to "Shows",
     Route.MyList to "My List",
-    Route.Libraries to "Libraries",
+    Route.Discover to "Discover",
 )
 
+/** Wordmark on the left, page tabs centred on screen, search/settings/profile on the right. */
 @Composable
 fun TopBar(current: Route.Tab, modifier: Modifier = Modifier) {
     val nav = LocalNav.current
-    Row(
-        modifier.fillMaxWidth().padding(start = Fm.SafeH, end = Fm.SafeH, top = Fm.SafeV, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Wordmark(20.dp)
-        Spacer(Modifier.width(44.dp))
-        tabs.forEach { (route, label) ->
-            TabItem(label, selected = current == route) { nav.tab(route) }
+    Box(modifier.fillMaxWidth().padding(start = Fm.SafeH, end = Fm.SafeH, top = Fm.SafeV, bottom = 6.dp)) {
+        Wordmark(20.dp, Modifier.align(Alignment.CenterStart))
+        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEach { (route, label) ->
+                TabItem(label, selected = current == route) { nav.tab(route) }
+            }
         }
-        Spacer(Modifier.weight(1f))
-        IconButton(Icons.Filled.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search)
-        Spacer(Modifier.width(10.dp))
-        IconButton(Icons.Filled.Settings, "Settings", { nav.tab(Route.Settings) }, active = current == Route.Settings)
-        Spacer(Modifier.width(10.dp))
-        Avatar { nav.push(Route.Profiles) }
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(Icons.Filled.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search)
+            Spacer(Modifier.width(10.dp))
+            IconButton(Icons.Filled.Settings, "Settings", { nav.tab(Route.Settings) }, active = current == Route.Settings)
+            Spacer(Modifier.width(10.dp))
+            Avatar { nav.push(Route.Profiles) }
+        }
     }
 }
 
@@ -97,12 +97,16 @@ private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         modifier = Modifier.padding(horizontal = 2.dp),
     ) {
-        Column(Modifier.padding(horizontal = 13.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
-            Box(
-                Modifier.padding(top = 3.dp).size(width = 14.dp, height = 2.dp)
-                    .background(if (selected) Fm.Accent else Color.Transparent, RoundedCornerShape(1.dp)),
+        // The selected marker is drawn over the bottom padding, so it never shifts the label off centre.
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label, style = MaterialTheme.typography.titleSmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
             )
+            if (selected) {
+                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(width = 14.dp, height = 2.dp).background(Fm.Accent, CircleShape))
+            }
         }
     }
 }
@@ -144,7 +148,7 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.labelSmall,
         letterSpacing = 0.8.sp,
         color = Fm.TextDim,
-        modifier = modifier.clip(RoundedCornerShape(3.dp)).border(1.dp, Fm.Parchment.copy(alpha = 0.3f), RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
+        modifier = modifier.clip(CircleShape).border(1.dp, Fm.Mist.copy(alpha = 0.3f), CircleShape).padding(horizontal = 7.dp, vertical = 1.dp),
     )
 }
 

@@ -15,36 +15,36 @@ import androidx.tv.material3.darkColorScheme
 import com.finmax.R
 
 /**
- * FINMAX palette, from the brand card:
- * - Chlorophyll Void `#1B3100`: the deep green the whole UI sits in (base, glass panels, washes).
- * - Taut Orchid `#8D3F7D`: the brand colour (primary actions, progress, focus glow).
- * - Ionized Parchment `#FFF2C5`: warm light (text, the focus fill).
+ * finmax palette, from the brand card:
+ * - Nox Noir `#141414`: the base everything sits on.
+ * - Royal Amethyst `#7E49B3`: the brand colour (primary actions, progress, focus glow).
+ * - Steel Mist `#CFCFCF`: cool light grey for secondary text and the focus fill's family.
  */
 object Fm {
     // Brand
-    val Void = Color(0xFF1B3100)
-    val Orchid = Color(0xFF8D3F7D)
-    val Parchment = Color(0xFFFFF2C5)
+    val Noir = Color(0xFF141414)
+    val Amethyst = Color(0xFF7E49B3)
+    val Mist = Color(0xFFCFCFCF)
 
-    // Base and surfaces: near-black tinted with Chlorophyll Void
-    val Bg = Color(0xFF090D05)
-    val Surface = Color(0xFF121A0B)
-    val SurfaceHigh = Color(0xFF1C2712)
-    val Outline = Color(0xFF34402A)
+    // Base and surfaces: neutral near-blacks around Nox Noir
+    val Bg = Color(0xFF0E0E0F)
+    val Surface = Color(0xFF1A1A1C)
+    val SurfaceHigh = Color(0xFF242427)
+    val Outline = Color(0xFF3A3A3F)
 
-    // Text: parchment-warm whites
-    val Text = Color(0xFFFFF8E2)
-    val TextDim = Color(0xFFCFC8AC)
-    val TextFaint = Color(0xFF8E8B74)
+    // Text: clean whites stepping down into Steel Mist
+    val Text = Color(0xFFF5F5F6)
+    val TextDim = Mist
+    val TextFaint = Color(0xFF8C8C92)
 
-    /** Readable orchid for text, rings and progress on dark backgrounds (6:1 on [Bg]). */
-    val Accent = Color(0xFFD486C4)
+    /** Readable amethyst for text, rings and progress on dark backgrounds. */
+    val Accent = Color(0xFFB58BE8)
     /** Fill of the focused control, and the colour drawn on it. */
-    val Focus = Parchment
-    val OnFocus = Color(0xFF142400)
+    val Focus = Color(0xFFF5F5F6)
+    val OnFocus = Noir
 
     val Error = Color(0xFFFF8A7A)
-    val Success = Color(0xFFB9DB7A)
+    val Success = Color(0xFF7FD9A0)
 
     /** TV overscan-safe margins (≈5% of a 960×540 dp canvas). */
     val SafeH = 48.dp
@@ -98,8 +98,8 @@ private val typography = Typography(
 fun FinmaxTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Fm.Orchid,
-            onPrimary = Fm.Parchment,
+            primary = Fm.Amethyst,
+            onPrimary = Fm.Text,
             secondary = Fm.Accent,
             background = Fm.Bg,
             onBackground = Fm.Text,

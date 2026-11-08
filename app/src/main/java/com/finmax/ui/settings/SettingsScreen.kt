@@ -133,7 +133,7 @@ fun SettingsScreen() {
             item { Header("About") }
             item {
                 Text(
-                    "FINMAX ${BuildConfig.VERSION_NAME} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
+                    "finmax ${BuildConfig.VERSION_NAME} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
                     style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,
                 )
                 Text(

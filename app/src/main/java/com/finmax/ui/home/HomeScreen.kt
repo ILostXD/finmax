@@ -84,7 +84,8 @@ import com.finmax.ui.LocalEntry
 import com.finmax.ui.LocalNav
 import com.finmax.ui.Navigator
 import com.finmax.ui.Route
-import com.finmax.ui.components.BackdropScrim
+import com.finmax.ui.components.GlassBackdrop
+import com.finmax.ui.components.GlassPanelBackground
 import com.finmax.ui.components.BrandBackdrop
 import com.finmax.ui.components.CardShape
 import com.finmax.ui.components.GhostButton
@@ -262,9 +263,8 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository) {
     BackHandler(enabled = !state.exploring && !topBarFocused) { runCatching { topBarReq.requestFocus() } }
 
     Box(Modifier.fillMaxSize().background(Fm.Bg)) {
-        // ---- Artwork: slides vertically through the carousel, sideways when the panel opens ----
-        val shift = with(density) { 150.dp.toPx() }
-        Box(Modifier.fillMaxSize().graphicsLayer { translationX = -explore * shift }) {
+        // ---- Artwork: sharp on the right, frosted glass under the text on the left ----
+        Box(Modifier.fillMaxSize()) {
             if (art == null) {
                 BrandBackdrop()
             } else {
@@ -280,16 +280,10 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository) {
                     },
                     label = "art",
                 ) { item ->
-                    AsyncImage(
-                        model = repo.backdrop(item), contentDescription = null, contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    GlassBackdrop(repo.backdrop(item), soft = repo.backdrop(item, 320))
                 }
             }
         }
-        // Stage scrim (text on the right) gives way to the explore scrim (text bottom-left, panel right).
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - explore }) { BackdropScrim(textSide = Alignment.End) }
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = explore }) { BackdropScrim(textSide = Alignment.Start) }
 
         // ---- Stage ----
         AnimatedVisibility(!state.exploring, enter = fadeIn(tween(400, 200)), exit = fadeOut(tween(250))) {
@@ -300,8 +294,8 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository) {
                 )
                 when {
                     slide != null -> {
-                        CarouselIndex(state.index, state.featured.size, Modifier.align(Alignment.CenterStart).padding(start = Fm.SafeH))
-                        Column(Modifier.align(Alignment.TopEnd).padding(end = Fm.SafeH, top = 88.dp).width(400.dp)) {
+                        CarouselIndex(state.index, state.featured.size, Modifier.align(Alignment.CenterEnd).padding(end = Fm.SafeH))
+                        Column(Modifier.align(Alignment.TopStart).padding(start = Fm.SafeH, top = 88.dp).width(440.dp)) {
                             // Only the words travel with the carousel; the buttons stay put so focus never drops.
                             AnimatedContent(
                                 targetState = slide,
@@ -328,7 +322,7 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository) {
                         actionLabel = "Try again", onAction = { state.refresh() },
                     )
                     !state.loading && state.sections.isNotEmpty() -> Column(
-                        Modifier.align(Alignment.CenterEnd).padding(end = Fm.SafeH).width(360.dp),
+                        Modifier.align(Alignment.CenterStart).padding(start = Fm.SafeH).width(360.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         Text("Your library", style = MaterialTheme.typography.displaySmall)
@@ -359,6 +353,12 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository) {
         }
         val panelOffset by animateDpAsState(if (state.exploring) 0.dp else PanelWidth + 24.dp, tween(620, easing = FastOutSlowInEasing), label = "panel")
         if (explore > 0.01f) {
+            // The list floats on frosted glass cut from the artwork itself, not on a dark box.
+            GlassPanelBackground(
+                art?.let { repo.backdrop(it, 320) },
+                fromRight = (PanelWidth - panelOffset).coerceAtLeast(0.dp),
+                modifier = Modifier.graphicsLayer { alpha = explore },
+            )
             RecommendationPanel(
                 state = state,
                 repo = repo,
@@ -386,7 +386,7 @@ private fun CarouselIndex(index: Int, count: Int, modifier: Modifier = Modifier)
             val h by animateDpAsState(if (i == current) 18.dp else 5.dp, tween(400), label = "dot")
             Box(
                 Modifier.width(if (i == current) 3.dp else 5.dp).height(h).clip(CircleShape)
-                    .background(if (i == current) Fm.Accent else Fm.Parchment.copy(alpha = 0.35f)),
+                    .background(if (i == current) Fm.Accent else Fm.Mist.copy(alpha = 0.35f)),
             )
         }
         Hairline(Modifier.height(18.dp), vertical = true, alpha = 0.35f)
@@ -493,7 +493,7 @@ fun RatingLine(item: BaseItemDto, modifier: Modifier = Modifier) {
                             halves == i * 2 + 1 -> Icons.AutoMirrored.Filled.StarHalf
                             else -> Icons.Filled.StarBorder
                         }
-                        Icon(icon, null, Modifier.size(13.dp), tint = Fm.Parchment)
+                        Icon(icon, null, Modifier.size(13.dp), tint = Fm.Mist)
                     }
                     Text("  %.1f".format(r), style = MaterialTheme.typography.labelMedium, color = Fm.Text)
                 }
@@ -544,10 +544,9 @@ private fun RecommendationPanel(
     onClose: () -> Unit,
 ) {
     Box(
-        Modifier.then(modifier).width(PanelWidth).fillMaxHeight()
-            .background(Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.55f), 0.12f to Fm.Bg.copy(alpha = 0.9f), 1f to Fm.Bg.copy(alpha = 0.96f))),
+        Modifier.then(modifier).width(PanelWidth).fillMaxHeight(),
     ) {
-        Hairline(Modifier.align(Alignment.CenterStart), vertical = true, alpha = 0.14f)
+        Hairline(Modifier.align(Alignment.CenterStart), vertical = true, alpha = 0.22f)
         LazyColumn(
             state = state.panel,
             contentPadding = PaddingValues(start = 22.dp, end = Fm.SafeH - 8.dp, top = Fm.SafeV + 8.dp, bottom = 180.dp),
@@ -600,10 +599,10 @@ private fun PanelRow(
             focused = it.isFocused
             if (it.isFocused) onFocused()
         },
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent, contentColor = Fm.Text,
-            focusedContainerColor = Fm.Parchment.copy(alpha = 0.09f), focusedContentColor = Fm.Text,
+            focusedContainerColor = Color.White.copy(alpha = 0.14f), focusedContentColor = Fm.Text,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
@@ -616,9 +615,9 @@ private fun PanelRow(
                 if (focused && item.type != BaseItemKind.COLLECTION_FOLDER && item.type != BaseItemKind.USER_VIEW) {
                     Box(
                         Modifier.align(Alignment.Center).size(34.dp).clip(CircleShape).background(Fm.Bg.copy(alpha = 0.55f))
-                            .border(1.dp, Fm.Parchment.copy(alpha = 0.7f), CircleShape),
+                            .border(1.dp, Fm.Mist.copy(alpha = 0.7f), CircleShape),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = Fm.Parchment) }
+                    ) { Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = Fm.Mist) }
                 }
                 item.progress?.let { ProgressStripe(it, Modifier.align(Alignment.BottomCenter)) }
             }

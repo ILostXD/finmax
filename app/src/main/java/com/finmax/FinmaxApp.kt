@@ -37,6 +37,7 @@ open class FinmaxApp : Application(), SingletonImageLoader.Factory {
     lateinit var http: OkHttpClient private set
     lateinit var subtitles: SubtitleSources private set
     lateinit var bazarr: BazarrClient private set
+    lateinit var seerr: com.finmax.data.SeerrClient private set
 
     /** Survives screen disposal; used for final progress reports and other fire-and-forget calls. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -66,13 +67,14 @@ open class FinmaxApp : Application(), SingletonImageLoader.Factory {
             context = this@FinmaxApp
             apiClientFactory = com.finmax.data.IoApiClientFactory(okHttpFactory)
             socketConnectionFactory = okHttpFactory
-            clientInfo = ClientInfo(name = "FINMAX", version = BuildConfig.VERSION_NAME)
+            clientInfo = ClientInfo(name = "finmax", version = BuildConfig.VERSION_NAME)
             deviceInfo = this@FinmaxApp.deviceInfo()
         }
         sessions = SessionManager(this, jellyfin, secure)
         sessions.restore()
         subtitles = SubtitleSources(this, http)
         bazarr = BazarrClient(http, settings)
+        seerr = com.finmax.data.SeerrClient(http, settings)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)

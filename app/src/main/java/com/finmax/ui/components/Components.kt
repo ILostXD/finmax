@@ -37,6 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -73,8 +79,9 @@ import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 
-val ButtonShape = RoundedCornerShape(6.dp)
-val CardShape = RoundedCornerShape(8.dp)
+/** Pill-shaped controls and soft, generously rounded cards. */
+val ButtonShape = RoundedCornerShape(percent = 50)
+val CardShape = RoundedCornerShape(14.dp)
 
 // ---- Scrolling ------------------------------------------------------------------------------
 
@@ -147,15 +154,15 @@ fun PillButton(
         modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(ButtonShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) Fm.Orchid else Color.White.copy(alpha = 0.09f),
-            contentColor = if (primary) Fm.Parchment else Fm.Text,
+            containerColor = if (primary) Fm.Amethyst else Color.White.copy(alpha = 0.09f),
+            contentColor = if (primary) Fm.Mist else Fm.Text,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
             disabledContainerColor = Color.White.copy(alpha = 0.04f),
             disabledContentColor = Fm.TextFaint,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Orchid.copy(alpha = 0.55f), 14.dp)),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.55f), 14.dp)),
     ) {
         Row(
             Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
@@ -247,7 +254,7 @@ fun FocusTile(
         colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
         scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Fm.Focus), shape = shape)),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Orchid.copy(alpha = 0.6f), 16.dp)),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.6f), 16.dp)),
         content = content,
     )
 }
@@ -339,7 +346,7 @@ fun MediaCard(
 
 @Composable
 fun ProgressStripe(fraction: Float, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(4.dp).background(Fm.Parchment.copy(alpha = 0.22f))) {
+    Box(modifier.fillMaxWidth().height(4.dp).background(Fm.Mist.copy(alpha = 0.22f))) {
         Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Fm.Accent))
     }
 }
@@ -403,7 +410,7 @@ fun Overline(text: String, modifier: Modifier = Modifier, color: Color = Fm.Acce
 fun Hairline(modifier: Modifier = Modifier, vertical: Boolean = false, alpha: Float = 0.18f) {
     Box(
         (if (vertical) modifier.fillMaxHeight().width(1.dp) else modifier.fillMaxWidth().height(1.dp))
-            .background(Fm.Parchment.copy(alpha = alpha)),
+            .background(Fm.Mist.copy(alpha = alpha)),
     )
 }
 
@@ -462,54 +469,90 @@ fun ErrorPanel(message: String, onRetry: () -> Unit, modifier: Modifier = Modifi
     MessagePanel("Couldn't load this", message, modifier, "Try again", onRetry)
 
 /**
- * Full-bleed artwork washed into the Chlorophyll Void base so foreground text stays readable.
- * [textSide] is where the text sits: the artwork fades to the base colour on that side.
+ * Full-bleed artwork treated like frosted glass: the picture stays sharp on the far side and melts
+ * into a blurred, lightly tinted copy of itself where the text sits, instead of fading to black.
+ * [soft] is a small render of the same art (cheap to blur); it falls back to [url].
+ * [textSide] is where the text sits.
  */
 @Composable
-fun BackdropImage(
+fun GlassBackdrop(
     url: String?,
     modifier: Modifier = Modifier,
-    dim: Float = 0f,
+    soft: String? = url,
     textSide: Alignment.Horizontal = Alignment.Start,
+    dim: Float = 0f,
+    sharp: @Composable BoxScope.() -> Unit = {},
 ) {
     Box(modifier.fillMaxSize().background(Fm.Bg)) {
-        if (url != null) {
-            AsyncImage(
-                model = url, contentDescription = null, contentScale = ContentScale.Crop,
-                alignment = if (textSide == Alignment.End) Alignment.CenterStart else Alignment.TopEnd,
-                modifier = Modifier.fillMaxSize(),
-            )
+        if (url == null) {
+            BrandBackdrop()
+            return@Box
         }
-        BackdropScrim(textSide)
+        // 1. Blurred copy fills the screen: the "glass" the text sits on.
+        AsyncImage(soft ?: url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(42.dp))
+        Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.42f)))
+        // Deeper tint where the text sits, so light artwork still reads (still glass, not black).
+        val shade = if (textSide == Alignment.End) {
+            Brush.horizontalGradient(0.45f to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f))
+        } else {
+            Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f), 0.6f to Color.Transparent)
+        }
+        Box(Modifier.fillMaxSize().background(shade))
+        // 2. Sharp art, masked so it dissolves into the glass toward the text side.
+        val fade = if (textSide == Alignment.End) {
+            Brush.horizontalGradient(0.38f to Color.Black, 0.78f to Color.Transparent)
+        } else {
+            Brush.horizontalGradient(0.3f to Color.Transparent, 0.7f to Color.Black)
+        }
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(fade, blendMode = BlendMode.DstIn)
+                    drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                },
+        ) {
+            AsyncImage(url, null, contentScale = ContentScale.Crop, alignment = Alignment.Center, modifier = Modifier.fillMaxSize())
+            sharp()
+        }
+        // 3. A whisper of shade at the very top keeps the top bar legible on bright art.
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
         if (dim > 0f) Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = dim)))
     }
 }
 
-/** The gradients of [BackdropImage], separately so video layers can sit under them too. */
 @Composable
-fun BackdropScrim(textSide: Alignment.Horizontal = Alignment.Start) {
-    // A faint green wash over all artwork ties every title into the palette.
-    Box(Modifier.fillMaxSize().background(Fm.Void.copy(alpha = 0.18f)))
-    val side = if (textSide == Alignment.End) {
-        Brush.horizontalGradient(0.3f to Color.Transparent, 0.62f to Fm.Bg.copy(alpha = 0.78f), 1f to Fm.Bg.copy(alpha = 0.95f))
-    } else {
-        Brush.horizontalGradient(0f to Fm.Bg, 0.36f to Fm.Bg.copy(alpha = 0.78f), 0.72f to Color.Transparent)
+fun BackdropImage(url: String?, modifier: Modifier = Modifier, dim: Float = 0f, textSide: Alignment.Horizontal = Alignment.Start) =
+    GlassBackdrop(url, modifier, textSide = textSide, dim = dim)
+
+/**
+ * The same frosted glass as [GlassBackdrop], drawn only inside a panel ([fromRight] wide, at the
+ * right edge), so a list can float over the artwork without a dark box behind it.
+ */
+@Composable
+fun GlassPanelBackground(soft: String?, fromRight: Dp, modifier: Modifier = Modifier) {
+    if (soft == null) return
+    Box(
+        modifier.fillMaxSize().drawWithContent {
+            clipRect(left = size.width - fromRight.toPx()) { this@drawWithContent.drawContent() }
+        },
+    ) {
+        AsyncImage(soft, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(42.dp))
+        Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.55f)))
     }
-    Box(Modifier.fillMaxSize().background(side))
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.55f), 0.22f to Color.Transparent, 0.55f to Color.Transparent, 1f to Fm.Bg)))
 }
 
 /**
- * The brand field from the palette card: Chlorophyll Void melting into Taut Orchid with a
- * Parchment glow. Used where there is no artwork (sign-in, profiles, empty states).
+ * The brand field from the palette card: Nox Noir with a Royal Amethyst glow rising from the
+ * bottom right. Used where there is no artwork (sign-in, profiles, empty states).
  */
 @Composable
 fun BrandBackdrop(modifier: Modifier = Modifier) {
     Box(
         modifier.fillMaxSize().background(Fm.Bg).drawBehind {
-            drawRect(Brush.radialGradient(listOf(Fm.Void, Color.Transparent), center = Offset(size.width * 0.1f, size.height * 0.05f), radius = size.width * 0.75f))
-            drawRect(Brush.radialGradient(listOf(Fm.Orchid.copy(alpha = 0.75f), Color.Transparent), center = Offset(size.width * 0.82f, size.height * 1.0f), radius = size.width * 0.6f))
-            drawRect(Brush.radialGradient(listOf(Fm.Parchment.copy(alpha = 0.32f), Color.Transparent), center = Offset(size.width * 0.98f, size.height * 1.12f), radius = size.width * 0.32f))
+            drawRect(Brush.radialGradient(listOf(Fm.Amethyst.copy(alpha = 0.7f), Color.Transparent), center = Offset(size.width * 0.9f, size.height * 1.05f), radius = size.width * 0.6f))
+            drawRect(Brush.radialGradient(listOf(Fm.Mist.copy(alpha = 0.10f), Color.Transparent), center = Offset(size.width * 0.05f, size.height * 0.0f), radius = size.width * 0.45f))
         },
     )
 }

@@ -562,7 +562,7 @@ private fun PlaybackInfo(pc: PlayerController, modifier: Modifier) {
         pc.audioStreams.firstOrNull { it.index == pc.audioIndex }?.let { "Audio track: ${it.displayTitle}" },
         "Subtitles: " + (sub?.let {
             "${it.displayTitle} · " + when {
-                it.isTextSubtitle -> "FINMAX renderer"
+                it.isTextSubtitle -> "finmax renderer"
                 pc.method == org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY -> "player (image)"
                 else -> "burned in by server"
             }
