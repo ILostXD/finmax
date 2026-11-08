@@ -256,6 +256,9 @@ fun FocusTile(
 
 enum class CardStyle { LANDSCAPE, POSTER }
 
+/** Repository for card artwork; screenshot tests provide one without a running app. */
+val LocalMediaRepo = androidx.compose.runtime.staticCompositionLocalOf<com.finmax.data.MediaRepository?> { null }
+
 val BaseItemDto.progress: Float?
     get() = userData?.playedPercentage?.toFloat()?.div(100f)?.takeIf { it in 0.01f..0.99f }
 
@@ -273,7 +276,7 @@ fun MediaCard(
     onLongClick: (() -> Unit)? = null,
     overlayText: Boolean = true,
 ) {
-    val repo = FinmaxApp.instance.repo
+    val repo = LocalMediaRepo.current ?: FinmaxApp.instance.repo
     val url = remember(item.id, style) { if (style == CardStyle.LANDSCAPE) repo.landscape(item) else repo.poster(item) }
     // Thumb art usually has the title baked in; only overlay the logo on plain backdrops.
     val logo = remember(item.id) {

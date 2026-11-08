@@ -8,7 +8,7 @@ Native Android TV Jellyfin client (Kotlin, Compose for TV, Media3, Jellyfin SDK 
 - `./gradlew :app:testDebugUnitTest` runs the subtitle sync tests (pure JVM, no device needed).
 - `./gradlew :app:assembleRelease` for anything that will run on the TV; debug Compose is too slow on the target.
 - `./gradlew :app:testDebugUnitTest -Pscreenshots` renders Home and details at 1080p with a fake library (Robolectric + Roborazzi) into `app/build/screenshots/`. Use it to check layout changes from the cloud; it can't show focus animation or video.
-- In cloud sessions the wrapper's distribution download can time out; a local Gradle 8.14.3 works the same.
+- In cloud sessions the wrapper's distribution download can time out; a local Gradle 8.14.3 works the same. Maven Central often answers 429 there: pass an init script (`-I`) that adds `https://maven-central.storage-download.googleapis.com/maven2` to `pluginManagement` and `dependencyResolutionManagement` repositories in `beforeSettings`.
 
 ## Gotchas learned on the device
 

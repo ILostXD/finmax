@@ -71,7 +71,7 @@ import java.util.UUID
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w960dp-h540dp-land-xhdpi")
+@Config(sdk = [35], qualifiers = "w960dp-h540dp-land-xhdpi", application = android.app.Application::class)
 class DesignScreenshots {
     @get:Rule val compose = createComposeRule()
 
@@ -209,6 +209,7 @@ class DesignScreenshots {
             LocalAsyncImagePreviewHandler provides previewHandler,
             LocalNav provides nav,
             LocalEntry provides nav.top,
+            com.finmax.ui.components.LocalMediaRepo provides repo,
         ) {
             FinmaxTheme {
                 CompositionLocalProvider(LocalContentColor provides Fm.Text) {

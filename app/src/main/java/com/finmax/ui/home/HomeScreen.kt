@@ -436,7 +436,6 @@ private fun StageActions(
 ) {
     var fav by remember(item.id) { mutableStateOf(item.userData?.isFavorite == true) }
     var lastButtonFocused by remember { mutableStateOf(false) }
-    val app = FinmaxApp.instance
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -461,7 +460,7 @@ private fun StageActions(
         IconButton(
             if (fav) Icons.Filled.Check else Icons.Filled.Add,
             if (fav) "In My List" else "Add to My List",
-            { app.appScope.launch { runCatching { fav = repo.setFavorite(item.id, !fav) } } },
+            { FinmaxApp.instance.appScope.launch { runCatching { fav = repo.setFavorite(item.id, !fav) } } },
             active = fav,
             modifier = Modifier.onFocusChanged { lastButtonFocused = it.isFocused }.focusMemory("hero/fav"),
         )
