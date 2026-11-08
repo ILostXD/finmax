@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320x180 TV launcher banner: dark field, gold accent bar, FINMAX wordmark drawn as text-free shapes is impractical, so the launcher label carries the name -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:angle="315" android:startColor="#FF07090D" android:endColor="#FF1A2233" />
+            <size android:width="320dp" android:height="180dp" />
+        </shape>
+    </item>
+    <item android:gravity="center" android:width="120dp" android:height="120dp">
+        <vector android:width="120dp" android:height="120dp" android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="#FFE8B04A" android:pathData="M4,4h10v3H7.5v3H13v3H7.5v7H4z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M14,10l7,5 -7,5z" />
+        </vector>
+    </item>
+</layer-list>
