@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,6 +50,7 @@ import com.finmax.ui.components.TopBar
 import com.finmax.ui.components.focusMemory
 import com.finmax.ui.components.friendlyError
 import com.finmax.ui.components.playKey
+import com.finmax.ui.components.popoverBlur
 import com.finmax.ui.entryState
 import com.finmax.ui.home.open
 import com.finmax.ui.theme.Fm
@@ -141,7 +143,7 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
     var pickingGenre by androidx.compose.runtime.remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
-      Column(Modifier.fillMaxSize()) {
+      Column(Modifier.fillMaxSize().popoverBlur(pickingGenre)) {
         if (tab != null) TopBar(tab)
         LazyVerticalGrid(
             state = state.grid,
@@ -192,13 +194,13 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
         if (pickingGenre) {
             BackHandler { pickingGenre = false }
             SidePanel("Genre") {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(listOf<String?>(null) + state.genres) { g ->
-                        PillButton(g ?: "All genres", {
+                        com.finmax.ui.components.PopoverItem(g ?: "All genres", {
                             state.genre = g
                             pickingGenre = false
                             state.reload()
-                        }, primary = g == state.genre, modifier = Modifier.focusMemory("genre/$g", initial = g == state.genre))
+                        }, primary = g == state.genre, modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -206,20 +208,7 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
     }
 }
 
-/** Right-hand overlay panel used for pickers (genres, tracks, settings choices). */
+/** Right-hand picker; see [com.finmax.ui.components.Popover] for the look. */
 @Composable
-fun SidePanel(title: String, width: androidx.compose.ui.unit.Dp = 360.dp, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.6f))) {
-        Row(Modifier.align(androidx.compose.ui.Alignment.CenterEnd).fillMaxHeight().width(width)) {
-            com.finmax.ui.components.Hairline(vertical = true, alpha = 0.2f)
-            Column(
-                Modifier.fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Fm.SurfaceHigh, Fm.Surface)))
-                    .padding(horizontal = 28.dp, vertical = Fm.SafeV),
-            ) {
-                Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 18.dp))
-                content()
-            }
-        }
-    }
-}
+fun SidePanel(title: String, width: androidx.compose.ui.unit.Dp = 360.dp, content: @Composable () -> Unit) =
+    com.finmax.ui.components.Popover(title, width, content)

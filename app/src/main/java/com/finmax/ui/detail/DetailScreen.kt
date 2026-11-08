@@ -9,8 +9,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import com.finmax.ui.components.AmbientVideo
 import com.finmax.ui.components.GlassBackdrop
+import com.finmax.ui.components.popoverBlur
 import com.finmax.ui.components.NoAutoScroll
-import com.finmax.ui.components.MinimalScroll
+import com.finmax.ui.components.rememberEdgeScroll
 import com.finmax.ui.components.GhostButton
 import com.finmax.ui.components.Hairline
 import com.finmax.ui.components.IconButton
@@ -199,12 +200,13 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
     val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.55f else 0f, androidx.compose.animation.core.tween(500), label = "dim")
 
     Box(Modifier.fillMaxSize().background(Fm.Bg)) {
+      Box(Modifier.fillMaxSize().popoverBlur(tracksOpen, 440.dp)) {
         GlassBackdrop(
             repo.backdrop(item), soft = repo.backdrop(item, 320), dim = dim,
             sharp = { AmbientVideo(item, playing = !scrolled && !tracksOpen) },
         )
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
-        LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 36.dp), modifier = Modifier.fillMaxSize()) {
             item(key = "head") {
                 Column(
                     Modifier.height(screenHeight).fillMaxWidth()
@@ -290,6 +292,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
         }
         }
+      }
         if (tracksOpen) {
             BackHandler { tracksOpen = false }
             TrackPicker(item, state, onDone = { tracksOpen = false })
@@ -301,7 +304,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun Section(modifier: Modifier, content: @Composable () -> Unit) {
-    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides MinimalScroll) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides rememberEdgeScroll()) {
         Column(modifier) { content() }
     }
 }
@@ -532,7 +535,7 @@ private fun TrackPicker(item: BaseItemDto, state: DetailState, onDone: () -> Uni
             if (sources.size > 1) {
                 item { Label("Version") }
                 items(sources, key = { "v" + it.id }) { s ->
-                    PillButton(s.name ?: s.id ?: "", {
+                    com.finmax.ui.components.PopoverItem(s.name ?: s.id ?: "", {
                         state.mediaSourceId = s.id
                         state.audioIndex = null
                         state.subtitleIndex = null
@@ -542,16 +545,16 @@ private fun TrackPicker(item: BaseItemDto, state: DetailState, onDone: () -> Uni
             item { Label("Audio") }
             items(streams.filter { it.type == MediaStreamType.AUDIO }, key = { "a" + it.index }) { s ->
                 val selected = (state.audioIndex ?: source?.defaultAudioStreamIndex) == s.index
-                PillButton(s.displayTitle ?: s.language ?: "Track ${s.index}", { state.audioIndex = s.index }, primary = selected,
+                com.finmax.ui.components.PopoverItem(s.displayTitle ?: s.language ?: "Track ${s.index}", { state.audioIndex = s.index }, primary = selected,
                     modifier = Modifier.fillMaxWidth().focusMemory("pa/${s.index}", initial = selected))
             }
             item { Label("Subtitles") }
             item(key = "soff") {
-                PillButton("Off", { state.subtitleIndex = -1 }, primary = state.subtitleIndex == -1, modifier = Modifier.fillMaxWidth())
+                com.finmax.ui.components.PopoverItem("Off", { state.subtitleIndex = -1 }, primary = state.subtitleIndex == -1, modifier = Modifier.fillMaxWidth())
             }
             items(streams.filter { it.type == MediaStreamType.SUBTITLE }, key = { "s" + it.index }) { s ->
                 val selected = (state.subtitleIndex ?: source?.defaultSubtitleStreamIndex) == s.index
-                PillButton(
+                com.finmax.ui.components.PopoverItem(
                     listOfNotNull(s.displayTitle ?: s.language, "external".takeIf { s.isExternal }).joinToString(" · "),
                     { state.subtitleIndex = s.index }, primary = selected, modifier = Modifier.fillMaxWidth(),
                 )

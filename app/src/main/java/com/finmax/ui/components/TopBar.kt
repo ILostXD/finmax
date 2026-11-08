@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,7 +51,8 @@ fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier, gradient: Boolea
         painterResource(if (gradient) R.drawable.finmax_wordmark_gradient else R.drawable.finmax_wordmark),
         contentDescription = "finmax",
         colorFilter = if (gradient) null else ColorFilter.tint(tint),
-        modifier = modifier.height(height),
+        // The wordmark's x-height sits low in its box; lift it so it lines up with text beside it.
+        modifier = modifier.offset(y = -height * 0.14f).height(height),
     )
 }
 

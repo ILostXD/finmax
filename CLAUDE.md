@@ -31,11 +31,13 @@ Native Android TV Jellyfin client (Kotlin, Compose for TV, Media3, Jellyfin SDK 
 - Palette (Nox Noir `#141414`, Royal Amethyst `#7E49B3`, Steel Mist `#CFCFCF`), type and shared components: `ui/theme/Theme.kt`, `ui/components/Components.kt`. Use the `Fm` tokens (`Focus`/`OnFocus` for focused fills, `Accent` for amethyst text and rings), never raw colours.
 - Artwork pages use `GlassBackdrop`: sharp art on the right dissolving into a blurred, tinted copy under the text on the left (no dark gradients). Panels over art use `GlassPanelBackground`. Controls are pills (`ButtonShape`), cards are 14 dp rounded (`CardShape`).
 - Logo sources with transparency are in `assets/` (`finmax_logo_black.png`, `finmax_logo_small_black.png`); the res/ wordmark, mark, banner and launcher icons are generated from them.
+- Popovers (pickers, track menus) use `Popover`/`PopoverItem` with `Modifier.popoverBlur(open)` on the page behind: no container, a progressive blur and tint toward the right edge. Popovers take focus themselves.
+- Home: spotlight on top (Left/Right at the button ends pages titles), rows always peeking below; entering the rows makes the backdrop and info follow the focused card. Horizontal rows use `rememberEdgeScroll()` so the first card returns to its start padding.
 - Details page scrolling is explicit (`NoAutoScroll` on the column, sections snap by key order, rows inside use `MinimalScroll`).
 - `AmbientVideo` (details background) must stay a `TextureView` that is never focusable, and must only hold a player while its page is the top of the back stack, so it never competes with the real player for the decoder.
 
 ## Reference
 
 - `reference/tv-photos/`: photos of the owner's TV showing the browsing experience they like (Netflix). These are inspiration for the layout; the app has its own design.
-- `reference/inspiration/`: the two layouts the redesign follows. `home-dune.jpg` drives Home (title and actions on the left over frosted glass, art on the right, a vertical list on Right); `details-joker.jpg` drives details (big title over full-bleed art; the fact column and section rail were dropped in favour of an inline facts line). Social links and site navigation in them are not part of the app.
+- `reference/inspiration/`: the two layouts the redesign follows. `home-dune.jpg` drives Home's look (title and actions on the left over frosted glass, art on the right); `details-joker.jpg` drives details (big title over full-bleed art; the fact column and section rail were dropped in favour of an inline facts line). Social links and site navigation in them are not part of the app.
 - Wholphin (https://github.com/damontecres/Wholphin) is the functional reference.

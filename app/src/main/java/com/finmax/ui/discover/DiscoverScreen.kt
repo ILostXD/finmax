@@ -44,6 +44,7 @@ import com.finmax.data.SeerrItem
 import com.finmax.ui.Route
 import com.finmax.ui.components.FocusTile
 import com.finmax.ui.components.GlassBackdrop
+import com.finmax.ui.components.popoverBlur
 import com.finmax.ui.components.Overline
 import com.finmax.ui.components.PillButton
 import com.finmax.ui.components.ScreenState
@@ -105,6 +106,7 @@ fun DiscoverScreen() {
     val bg = state.focused
 
     Box(Modifier.fillMaxSize()) {
+      Box(Modifier.fillMaxSize().popoverBlur(state.selected != null, 440.dp)) {
         Crossfade(bg?.tmdbId, animationSpec = tween(500), label = "bg") {
             val item = bg?.takeIf { b -> b.tmdbId == it }
             GlassBackdrop(item?.backdrop, soft = item?.backdropSmall)
@@ -143,6 +145,7 @@ fun DiscoverScreen() {
                 }
             }
         }
+      }
         state.selected?.let { item ->
             BackHandler { state.selected = null }
             RequestPanel(item, state.seerr, onClose = { state.selected = null })

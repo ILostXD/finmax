@@ -530,7 +530,7 @@ private fun TrackPanel(title: String, options: List<Pair<Int, String>>, selected
                 val (id, label) = options[i]
                 val req = remember { FocusRequester() }
                 if (id == selected || (selected == null && i == 0)) LaunchedEffect(Unit) { delay(50); runCatching { req.requestFocus() } }
-                PillButton(label, { onPick(id) }, primary = id == selected, modifier = Modifier.fillMaxWidth().focusRequester(req))
+                com.finmax.ui.components.PopoverItem(label, { onPick(id) }, primary = id == selected, modifier = Modifier.fillMaxWidth().focusRequester(req))
             }
         }
     }
@@ -608,7 +608,7 @@ private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> U
                         }
                     }
                 }
-                item { PillButton("Fix subtitle sync…", onAssistant, primary = true, modifier = Modifier.fillMaxWidth()) }
+                item { com.finmax.ui.components.PopoverItem("Fix subtitle sync…", onAssistant, primary = true, modifier = Modifier.fillMaxWidth()) }
                 item { PillButton("Sync to a line…", onLines, modifier = Modifier.fillMaxWidth()) }
             } else if (pc.cuesLoading) {
                 item { Text("Loading subtitles…", color = Fm.TextDim) }
@@ -624,7 +624,7 @@ private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> U
                 item { PillButton("Find subtitles…", onAssistant, modifier = Modifier.fillMaxWidth()) }
             }
             item { Text("Tracks", style = MaterialTheme.typography.titleMedium, color = Fm.Accent, modifier = Modifier.padding(top = 10.dp)) }
-            item { PillButton("Off", { pc.selectSubtitle(-1); onClose() }, primary = pc.subtitleIndex == null, modifier = Modifier.fillMaxWidth()) }
+            item { com.finmax.ui.components.PopoverItem("Off", { pc.selectSubtitle(-1); onClose() }, primary = pc.subtitleIndex == null, modifier = Modifier.fillMaxWidth()) }
             items(pc.subtitleStreams.size) { i ->
                 val s = pc.subtitleStreams[i]
                 val label = listOfNotNull(
@@ -632,7 +632,7 @@ private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> U
                     "external".takeIf { s.isExternal },
                     "image".takeIf { !s.isTextSubtitle },
                 ).joinToString(" · ")
-                PillButton(label, { pc.selectSubtitle(s.index) }, primary = s.index == pc.subtitleIndex, modifier = Modifier.fillMaxWidth())
+                com.finmax.ui.components.PopoverItem(label, { pc.selectSubtitle(s.index) }, primary = s.index == pc.subtitleIndex, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -724,12 +724,8 @@ private fun LineSyncPanel(pc: PlayerController, a: SyncAssistant, onDone: () -> 
             delay(700)
         }
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-        Column(
-            Modifier.fillMaxHeight().width(440.dp).background(Fm.Surface.copy(alpha = 0.94f)).padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Sync to a line", style = MaterialTheme.typography.headlineMedium)
+    com.finmax.ui.library.SidePanel("Sync to a line", width = 460.dp) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "Press OK on a line the moment you hear it spoken. One line fixes a constant delay; a second line at least a minute later also fixes drift.",
                 style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,

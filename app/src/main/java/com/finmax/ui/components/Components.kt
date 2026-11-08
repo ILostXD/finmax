@@ -95,6 +95,25 @@ val MinimalScroll = object : androidx.compose.foundation.gestures.BringIntoViewS
     }
 }
 
+/**
+ * For horizontal rows: keeps a focused card at least [margin] from either edge, so scrolling back
+ * to the first card restores the row's original start padding instead of pinning it to the edge.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun rememberEdgeScroll(margin: Dp = Fm.SafeH): androidx.compose.foundation.gestures.BringIntoViewSpec {
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { margin.toPx() }
+    return remember(px) {
+        object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = when {
+                offset < px -> offset - px
+                offset + size > containerSize - px -> offset + size - (containerSize - px)
+                else -> 0f
+            }
+        }
+    }
+}
+
 /** Never auto-scrolls: the screen positions content itself (Home snaps rows explicitly). */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 val NoAutoScroll = object : androidx.compose.foundation.gestures.BringIntoViewSpec {

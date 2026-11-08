@@ -53,6 +53,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.finmax.ui.components.CardStyle
+import com.finmax.ui.components.MediaCard
+import com.finmax.ui.components.rememberEdgeScroll
+import com.finmax.ui.components.NoAutoScroll
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.animation.Crossfade
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -122,25 +132,24 @@ class HomeState(private val repo: MediaRepository, autoLoad: Boolean = true) : S
     var loading by mutableStateOf(true)
     var error by mutableStateOf<String?>(null)
 
-    /** Position in the vertical carousel; grows without bound, read modulo [featured] size. */
+    /** Position in the spotlight; grows without bound, read modulo [featured] size. */
     var index by mutableIntStateOf(0)
-    /** +1 when the carousel moved down (next), -1 when it moved up. Drives the slide direction. */
-    var direction by mutableIntStateOf(1)
 
-    /** The recommendations panel is open and the artwork has slid aside. */
-    var exploring by mutableStateOf(false)
+    /** Focus is in the rows (the spotlight's buttons step aside). */
+    var inRows by mutableStateOf(false)
     var focused by mutableStateOf<BaseItemDto?>(null)
     var focusedSection by mutableStateOf<String?>(null)
-    val panel = LazyListState()
+    var focusedRow by mutableIntStateOf(0)
+    val rows = LazyListState()
+    private val rowStates = HashMap<String, LazyListState>()
+    fun rowState(key: String) = rowStates.getOrPut(key) { LazyListState() }
 
     val slide: BaseItemDto? get() = featured.takeIf { it.isNotEmpty() }?.let { it[index.mod(it.size)] }
 
     init { if (autoLoad) refresh() }
 
     fun step(by: Int) {
-        if (featured.size < 2) return
-        direction = by
-        index += by
+        if (featured.size > 1) index += by
     }
 
     fun refresh() {
@@ -207,244 +216,189 @@ fun Navigator.open(item: BaseItemDto) = when (item.type) {
     else -> push(Route.Detail(item.id))
 }
 
-private val PanelWidth = 404.dp
-private const val AUTO_ADVANCE_MS = 10_000L
+private const val AUTO_ADVANCE_MS = 9_000L
+private val CardWidth = 208.dp
 
 /**
- * Home: a vertical carousel of random titles ("the stage"). Up/Down moves through it; Right slides
- * the artwork aside and opens the recommendations panel, a vertical list of everything Home used
- * to show as rows. Left or Back closes the panel. Back on the stage jumps to the top bar.
+ * Home: the featured spotlight on top (text and actions on the left over frosted art, Left/Right on
+ * the buttons pages through featured titles) and the content rows always peeking in underneath.
+ * Down enters the rows; the backdrop and the info on the left then follow the focused card and the
+ * focused row snaps up under it. Up from the first row (or Back) returns to the spotlight.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen() {
     val repo = FinmaxApp.instance.repo
     HomeContent(entryState { HomeState(repo) }, repo)
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun HomeContent(state: HomeState, repo: MediaRepository) {
     val nav = LocalNav.current
-    val entry = LocalEntry.current
     val context = LocalContext.current
-    val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val playReq = remember { FocusRequester() }
-    val panelReq = remember { FocusRequester() }
     val topBarReq = remember { FocusRequester() }
     var topBarFocused by remember { mutableStateOf(false) }
 
-    val explore by animateFloatAsState(if (state.exploring) 1f else 0f, tween(620, easing = FastOutSlowInEasing), label = "explore")
     val slide = state.slide
-    val art = if (state.exploring) state.focused ?: slide else slide
+    val active = if (state.inRows) state.focused ?: slide else slide
+    // Follow focus with the artwork only once it settles, so fast scrolling doesn't load every backdrop.
+    var art by remember { mutableStateOf(active) }
+    LaunchedEffect(active?.id) {
+        if (state.inRows) delay(260)
+        art = active
+    }
 
-    // Warm the image cache so carousel slides arrive with their artwork.
+    // Warm the image cache so spotlight slides arrive with their artwork.
     LaunchedEffect(state.featured) {
         val loader = SingletonImageLoader.get(context)
         state.featured.forEach { f -> repo.backdrop(f)?.let { loader.enqueue(ImageRequest.Builder(context).data(it).build()) } }
     }
-    LaunchedEffect(state.index, state.exploring, state.featured) {
-        if (state.exploring || state.featured.size < 2) return@LaunchedEffect
+    LaunchedEffect(state.index, state.inRows, topBarFocused, state.featured) {
+        if (state.inRows || topBarFocused || state.featured.size < 2) return@LaunchedEffect
         delay(AUTO_ADVANCE_MS)
         state.step(1)
     }
-    // Move focus across when the panel opens or closes (the other side has just been composed).
-    LaunchedEffect(state.exploring) {
-        if (entry.pendingRestore) return@LaunchedEffect // focusMemory is putting focus back
-        repeat(15) {
-            delay(40)
-            val ok = runCatching { if (state.exploring) panelReq.requestFocus() else playReq.requestFocus() }.getOrDefault(false)
-            if (ok) return@LaunchedEffect
-        }
-    }
-    BackHandler(enabled = state.exploring) { state.exploring = false }
-    BackHandler(enabled = !state.exploring && !topBarFocused) { runCatching { topBarReq.requestFocus() } }
-
-    Box(Modifier.fillMaxSize().background(Fm.Bg)) {
-        // ---- Artwork: sharp on the right, frosted glass under the text on the left ----
-        Box(Modifier.fillMaxSize()) {
-            if (art == null) {
-                BrandBackdrop()
-            } else {
-                AnimatedContent(
-                    targetState = art,
-                    contentKey = { it.id },
-                    transitionSpec = {
-                        if (state.exploring) {
-                            fadeIn(tween(450)) togetherWith fadeOut(tween(450))
-                        } else {
-                            verticalSlide(state.direction)
-                        }
-                    },
-                    label = "art",
-                ) { item ->
-                    GlassBackdrop(repo.backdrop(item), soft = repo.backdrop(item, 320))
-                }
+    fun backToSpotlight() {
+        state.inRows = false
+        scope.launch { state.rows.animateScrollToItem(0) }
+        scope.launch {
+            repeat(10) {
+                delay(40)
+                if (runCatching { playReq.requestFocus() }.getOrDefault(false)) return@launch
             }
         }
+    }
+    // Rows load in any order; until the user enters them, keep the first row (Continue Watching) on top.
+    LaunchedEffect(state.sections.size) { if (!state.inRows) state.rows.scrollToItem(0) }
+    BackHandler(enabled = state.inRows) { backToSpotlight() }
+    BackHandler(enabled = !state.inRows && !topBarFocused) { runCatching { topBarReq.requestFocus() } }
 
-        // ---- Stage ----
-        AnimatedVisibility(!state.exploring, enter = fadeIn(tween(400, 200)), exit = fadeOut(tween(250))) {
-            Box(Modifier.fillMaxSize()) {
-                TopBar(
-                    Route.Home,
-                    Modifier.focusRequester(topBarReq).onFocusChanged { topBarFocused = it.hasFocus },
-                )
-                when {
-                    slide != null -> {
-                        CarouselIndex(state.index, state.featured.size, Modifier.align(Alignment.CenterEnd).padding(end = Fm.SafeH))
-                        Column(Modifier.align(Alignment.TopStart).padding(start = Fm.SafeH, top = 88.dp).width(440.dp)) {
-                            // Only the words travel with the carousel; the buttons stay put so focus never drops.
-                            AnimatedContent(
-                                targetState = slide,
-                                contentKey = { it.id },
-                                transitionSpec = { verticalSlide(state.direction, delayMs = 90) },
-                                label = "stage",
-                                modifier = Modifier.height(270.dp),
-                            ) { item -> SlideInfo(item, repo) }
-                            Spacer(Modifier.height(20.dp))
-                            StageActions(
+    val rowsTop by animateDpAsState(if (state.inRows) 262.dp else 372.dp, tween(450, easing = FastOutSlowInEasing), label = "rowsTop")
+    val spotlight by animateFloatAsState(if (state.inRows) 0f else 1f, tween(300), label = "spotlight")
+
+    Box(Modifier.fillMaxSize().background(Fm.Bg)) {
+        Crossfade(art, animationSpec = tween(550), label = "art") { item ->
+            if (item == null) BrandBackdrop() else GlassBackdrop(repo.backdrop(item), soft = repo.backdrop(item, 320))
+        }
+        TopBar(Route.Home, Modifier.focusRequester(topBarReq).onFocusChanged { topBarFocused = it.hasFocus })
+
+        when {
+            slide == null && state.error != null -> MessagePanel(
+                "Nothing to show yet", state.error!!, Modifier.align(Alignment.Center),
+                actionLabel = "Try again", onAction = { state.refresh() },
+            )
+            else -> Column(Modifier.align(Alignment.TopStart).padding(start = Fm.SafeH, top = 84.dp).width(480.dp)) {
+                AnimatedContent(
+                    targetState = active,
+                    contentKey = { it?.id },
+                    transitionSpec = { fadeIn(tween(350, 80)) togetherWith fadeOut(tween(200)) },
+                    label = "info",
+                ) { item ->
+                    if (item != null) Info(item, repo, if (state.inRows) state.focusedSection else null)
+                }
+                if (slide != null) {
+                    // Always composed (so Up can return to it), but stepped aside while browsing the rows.
+                    Column(Modifier.graphicsLayer { alpha = spotlight }.focusProperties { canFocus = !state.inRows }) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SpotlightActions(
                                 item = slide,
                                 repo = repo,
                                 nav = nav,
                                 playReq = playReq,
                                 onStep = { state.step(it) },
-                                onAtTop = { state.index.mod(state.featured.size) == 0 },
-                                onExplore = { state.exploring = true },
                             )
+                            Spacer(Modifier.width(20.dp))
+                            SpotlightDots(state.index, state.featured.size)
                         }
-                        state.sections.firstOrNull()?.let { PanelPeek(it, repo, Modifier.align(Alignment.BottomEnd)) }
                     }
-                    state.error != null -> MessagePanel(
-                        "Nothing to show yet", state.error!!, Modifier.align(Alignment.Center),
-                        actionLabel = "Try again", onAction = { state.refresh() },
+                }
+            }
+        }
+
+        CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
+            LazyColumn(
+                state = state.rows,
+                contentPadding = PaddingValues(bottom = 320.dp),
+                modifier = Modifier.fillMaxSize().padding(top = rowsTop)
+                    .onFocusChanged { if (it.hasFocus) state.inRows = true }
+                    .onPreviewKeyEvent { e ->
+                        val up = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP && e.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
+                        if (up && state.inRows && state.focusedRow == 0) { backToSpotlight(); true } else false
+                    },
+            ) {
+                itemsIndexed(state.sections, key = { _, s -> s.key }) { i, section ->
+                    HomeRow(
+                        section = section,
+                        listState = state.rowState(section.key),
+                        onOpen = { nav.open(it) },
+                        onFocused = { item ->
+                            state.focused = item
+                            state.focusedSection = section.title
+                            if (state.focusedRow != i || state.rows.firstVisibleItemIndex != i) {
+                                state.focusedRow = i
+                                scope.launch { state.rows.animateScrollToItem(i) }
+                            }
+                        },
                     )
-                    !state.loading && state.sections.isNotEmpty() -> Column(
-                        Modifier.align(Alignment.CenterStart).padding(start = Fm.SafeH).width(360.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Text("Your library", style = MaterialTheme.typography.displaySmall)
-                        Text("Nothing with widescreen art to feature yet.", color = Fm.TextDim, style = MaterialTheme.typography.bodyLarge)
-                        PillButton(
-                            "Browse", { state.exploring = true }, icon = Icons.AutoMirrored.Filled.ArrowForward, primary = true,
-                            modifier = Modifier.focusRequester(playReq).focusMemory("hero/play", initial = true),
-                        )
-                    }
                 }
             }
-        }
-
-        // ---- Explore: focused title on the left, recommendations panel on the right ----
-        AnimatedVisibility(state.exploring, enter = fadeIn(tween(400, 250)), exit = fadeOut(tween(200))) {
-            Box(Modifier.fillMaxSize()) {
-                Wordmark(20.dp, Modifier.padding(start = Fm.SafeH, top = Fm.SafeV + 9.dp))
-                state.focused?.let { f ->
-                    AnimatedContent(
-                        targetState = f,
-                        contentKey = { it.id },
-                        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
-                        label = "focused",
-                        modifier = Modifier.align(Alignment.BottomStart).padding(start = Fm.SafeH, bottom = 44.dp, end = PanelWidth + 40.dp),
-                    ) { FocusedInfo(it, state.focusedSection, repo) }
-                }
-            }
-        }
-        val panelOffset by animateDpAsState(if (state.exploring) 0.dp else PanelWidth + 24.dp, tween(620, easing = FastOutSlowInEasing), label = "panel")
-        if (explore > 0.01f) {
-            // The list floats on frosted glass cut from the artwork itself, not on a dark box.
-            GlassPanelBackground(
-                art?.let { repo.backdrop(it, 320) },
-                fromRight = (PanelWidth - panelOffset).coerceAtLeast(0.dp),
-                modifier = Modifier.graphicsLayer { alpha = explore },
-            )
-            RecommendationPanel(
-                state = state,
-                repo = repo,
-                nav = nav,
-                modifier = Modifier.align(Alignment.CenterEnd).offset(x = panelOffset).focusRequester(panelReq),
-                onClose = { state.exploring = false },
-            )
         }
     }
 }
 
-private fun verticalSlide(direction: Int, delayMs: Int = 0): ContentTransform =
-    (slideInVertically(tween(700, delayMs, FastOutSlowInEasing)) { h -> h * direction / 3 } + fadeIn(tween(600, delayMs))) togetherWith
-        (slideOutVertically(tween(600, easing = FastOutSlowInEasing)) { h -> -h * direction / 3 } + fadeOut(tween(450)))
-
-/** "01 ┃ 08" with a dot per slide, like the section index running down the reference art. */
+/** Overline, logo or title, facts and a short synopsis for the spotlight or the focused card. */
 @Composable
-private fun CarouselIndex(index: Int, count: Int, modifier: Modifier = Modifier) {
-    if (count < 2) return
-    val current = index.mod(count)
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text("%02d".format(current + 1), style = MaterialTheme.typography.headlineSmall, color = Fm.Text)
-        Hairline(Modifier.height(18.dp), vertical = true, alpha = 0.35f)
-        repeat(count) { i ->
-            val h by animateDpAsState(if (i == current) 18.dp else 5.dp, tween(400), label = "dot")
-            Box(
-                Modifier.width(if (i == current) 3.dp else 5.dp).height(h).clip(CircleShape)
-                    .background(if (i == current) Fm.Accent else Fm.Mist.copy(alpha = 0.35f)),
-            )
-        }
-        Hairline(Modifier.height(18.dp), vertical = true, alpha = 0.35f)
-        Text("%02d".format(count), style = MaterialTheme.typography.labelMedium, color = Fm.TextFaint)
-    }
-}
-
-@Composable
-private fun SlideInfo(item: BaseItemDto, repo: MediaRepository) {
-    val logo = remember(item.id) { repo.logo(item) }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
-        Overline(listOfNotNull("Featured", typeLabel(item)).joinToString("  ·  "))
-        Spacer(Modifier.height(10.dp))
-        if (logo != null) {
-            AsyncImage(logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart, modifier = Modifier.height(104.dp).fillMaxWidth())
-        } else {
-            BigTitle(item.name ?: "")
-        }
-        Spacer(Modifier.height(14.dp))
-        Text(
-            listOfNotNull(item.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotEmpty() }, item.productionYear?.toString()).joinToString("     "),
-            style = MaterialTheme.typography.labelMedium, color = Fm.TextDim,
-        )
+private fun Info(item: BaseItemDto, repo: MediaRepository, section: String?) {
+    val logo = remember(item.id) { if (item.type == BaseItemKind.EPISODE) null else repo.logo(item) }
+    val browsing = section != null
+    Column(Modifier.height(if (browsing) 170.dp else 226.dp), verticalArrangement = Arrangement.Bottom) {
+        Overline(section ?: listOfNotNull("Featured", typeLabel(item)).joinToString("  ·  "))
         Spacer(Modifier.height(8.dp))
+        if (item.type == BaseItemKind.EPISODE) {
+            Text(item.seriesName ?: "", style = MaterialTheme.typography.titleMedium, color = Fm.TextDim, maxLines = 1)
+        }
+        if (logo != null) {
+            AsyncImage(
+                logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart,
+                modifier = Modifier.height(if (browsing) 60.dp else 84.dp).fillMaxWidth(0.8f),
+            )
+        } else {
+            BigTitle(item.name ?: "", maxLines = if (browsing) 1 else 2)
+        }
+        Spacer(Modifier.height(10.dp))
+        if (browsing) MetaLine(metaParts(item)) else RatingLine(item)
         Text(
             item.overview ?: "", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,
-            maxLines = 3, overflow = TextOverflow.Ellipsis,
+            maxLines = if (browsing) 2 else 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp),
         )
-        Spacer(Modifier.height(12.dp))
-        RatingLine(item)
+        if (browsing) item.progress?.let { p -> Box(Modifier.padding(top = 10.dp).width(220.dp).clip(CircleShape)) { ProgressStripe(p) } }
     }
 }
 
-/**
- * Play / Details / My List for the current slide. Down and Up move the carousel; Up on the first
- * slide reaches the top bar; Right from the last button opens the recommendations panel.
- */
+/** Play / Details / My List for the current spotlight title. Left and Right at the ends page through titles. */
 @Composable
-private fun StageActions(
+private fun SpotlightActions(
     item: BaseItemDto,
     repo: MediaRepository,
     nav: Navigator,
     playReq: FocusRequester,
     onStep: (Int) -> Unit,
-    onAtTop: () -> Boolean,
-    onExplore: () -> Unit,
 ) {
     var fav by remember(item.id) { mutableStateOf(item.userData?.isFavorite == true) }
-    var lastButtonFocused by remember { mutableStateOf(false) }
+    var firstFocused by remember { mutableStateOf(false) }
+    var lastFocused by remember { mutableStateOf(false) }
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.onPreviewKeyEvent { e ->
             if (e.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
             when (e.nativeKeyEvent.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { onStep(1); true }
-                KeyEvent.KEYCODE_DPAD_UP -> if (onAtTop()) false else { onStep(-1); true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (lastButtonFocused) { onExplore(); true } else false
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (firstFocused) { onStep(-1); true } else false
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (lastFocused) { onStep(1); true } else false
                 else -> false
             }
         },
@@ -454,7 +408,7 @@ private fun StageActions(
             if (resumable) "Resume" else "Play now",
             { if (item.type == BaseItemKind.SERIES) nav.push(Route.Detail(item.id)) else nav.push(Route.Player(item.id)) },
             icon = Icons.Filled.PlayArrow, primary = true,
-            modifier = Modifier.focusRequester(playReq).focusMemory("hero/play", initial = true),
+            modifier = Modifier.focusRequester(playReq).onFocusChanged { firstFocused = it.isFocused }.focusMemory("hero/play", initial = true),
         )
         GhostButton("Details", { nav.push(Route.Detail(item.id)) }, modifier = Modifier.focusMemory("hero/details"))
         IconButton(
@@ -462,8 +416,65 @@ private fun StageActions(
             if (fav) "In My List" else "Add to My List",
             { FinmaxApp.instance.appScope.launch { runCatching { fav = repo.setFavorite(item.id, !fav) } } },
             active = fav,
-            modifier = Modifier.onFocusChanged { lastButtonFocused = it.isFocused }.focusMemory("hero/fav"),
+            modifier = Modifier.onFocusChanged { lastFocused = it.isFocused }.focusMemory("hero/fav"),
         )
+    }
+}
+
+/** Fixed-size dots in a soft dark pill, readable on any artwork and never shifting with the count. */
+@Composable
+private fun SpotlightDots(index: Int, count: Int) {
+    if (count < 2) return
+    val current = index.mod(count)
+    Row(
+        Modifier.clip(CircleShape).background(Fm.Bg.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(count) { i ->
+            val w by animateDpAsState(if (i == current) 18.dp else 6.dp, tween(350), label = "dot")
+            Box(Modifier.width(w).height(6.dp).clip(CircleShape).background(if (i == current) Fm.Accent else Fm.Mist.copy(alpha = 0.45f)))
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HomeRow(
+    section: HomeSection,
+    listState: LazyListState,
+    onOpen: (BaseItemDto) -> Unit,
+    onFocused: (BaseItemDto) -> Unit,
+) {
+    val nav = LocalNav.current
+    var focusedIndex by remember { mutableIntStateOf(-1) }
+    Column(
+        // Right past the last card stays put instead of jumping to whatever lies beyond (the top bar).
+        Modifier.onPreviewKeyEvent { e ->
+            e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && e.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                focusedIndex == section.items.lastIndex
+        },
+    ) {
+        Text(section.title, style = MaterialTheme.typography.titleMedium, color = Fm.Text, modifier = Modifier.padding(start = Fm.SafeH, top = 6.dp))
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rememberEdgeScroll()) {
+            LazyRow(
+                state = listState,
+                contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
+                modifier = Modifier.focusRestorer(),
+            ) {
+                itemsIndexed(section.items, key = { _, it -> it.id }) { i, item ->
+                    MediaCard(
+                        item = item,
+                        style = CardStyle.LANDSCAPE,
+                        width = CardWidth,
+                        onClick = { onOpen(item) },
+                        onFocused = { focusedIndex = i; onFocused(item) },
+                        modifier = Modifier.focusMemory("${section.key}/${item.id}").playKey(item, nav),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -511,164 +522,6 @@ fun RatingLine(item: BaseItemDto, modifier: Modifier = Modifier) {
 }
 
 /** The top of the recommendations list peeking in at the bottom right, hinting that Right opens it. */
-@Composable
-private fun PanelPeek(section: HomeSection, repo: MediaRepository, modifier: Modifier = Modifier) {
-    Column(modifier.padding(end = Fm.SafeH).width(400.dp).offset(y = 46.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(section.title, style = MaterialTheme.typography.titleSmall, color = Fm.Text)
-            Spacer(Modifier.width(10.dp))
-            Overline("Press ▶", color = Fm.TextFaint)
-        }
-        Hairline(Modifier.padding(top = 8.dp, bottom = 10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            section.items.take(2).forEachIndexed { i, it ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AsyncImage(
-                        repo.landscape(it, 320), null, contentScale = ContentScale.Crop,
-                        modifier = Modifier.width(132.dp).aspectRatio(16f / 9f).clip(CardShape).graphicsLayer { alpha = 0.85f },
-                    )
-                    Text("%02d".format(i + 1), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Normal, color = Fm.TextDim)
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun RecommendationPanel(
-    state: HomeState,
-    repo: MediaRepository,
-    nav: Navigator,
-    modifier: Modifier,
-    onClose: () -> Unit,
-) {
-    Box(
-        Modifier.then(modifier).width(PanelWidth).fillMaxHeight(),
-    ) {
-        Hairline(Modifier.align(Alignment.CenterStart), vertical = true, alpha = 0.22f)
-        LazyColumn(
-            state = state.panel,
-            contentPadding = PaddingValues(start = 22.dp, end = Fm.SafeH - 8.dp, top = Fm.SafeV + 8.dp, bottom = 180.dp),
-            modifier = Modifier.fillMaxSize().focusRestorer().onPreviewKeyEvent { e ->
-                val left = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
-                if (left && e.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) onClose()
-                left
-            },
-        ) {
-            state.sections.forEachIndexed { si, section ->
-                item(key = "h/${section.key}") {
-                    Column(Modifier.padding(top = if (si == 0) 0.dp else 26.dp, bottom = 8.dp, start = 8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("%02d".format(si + 1), style = MaterialTheme.typography.labelSmall, color = Fm.Accent)
-                            Text(section.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Hairline(Modifier.padding(top = 10.dp))
-                    }
-                }
-                itemsIndexed(section.items, key = { _, it -> "${section.key}/${it.id}" }) { i, item ->
-                    PanelRow(
-                        item, i + 1, repo,
-                        onClick = { nav.open(item) },
-                        onFocused = {
-                            state.focused = item
-                            state.focusedSection = section.title
-                        },
-                        modifier = Modifier.focusMemory("panel/${section.key}/${item.id}").playKey(item, nav),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PanelRow(
-    item: BaseItemDto,
-    number: Int,
-    repo: MediaRepository,
-    onClick: () -> Unit,
-    onFocused: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val url = remember(item.id) { repo.landscape(item, 400) }
-    Surface(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth().padding(vertical = 3.dp).onFocusChanged {
-            focused = it.isFocused
-            if (it.isFocused) onFocused()
-        },
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent, contentColor = Fm.Text,
-            focusedContainerColor = Color.White.copy(alpha = 0.14f), focusedContentColor = Fm.Text,
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
-    ) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier.width(150.dp).aspectRatio(16f / 9f).clip(CardShape).background(Fm.Surface)
-                    .then(if (focused) Modifier.border(2.dp, Fm.Focus, CardShape) else Modifier),
-            ) {
-                if (url != null) AsyncImage(url, item.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                if (focused && item.type != BaseItemKind.COLLECTION_FOLDER && item.type != BaseItemKind.USER_VIEW) {
-                    Box(
-                        Modifier.align(Alignment.Center).size(34.dp).clip(CircleShape).background(Fm.Bg.copy(alpha = 0.55f))
-                            .border(1.dp, Fm.Mist.copy(alpha = 0.7f), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = Fm.Mist) }
-                }
-                item.progress?.let { ProgressStripe(it, Modifier.align(Alignment.BottomCenter)) }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "%02d".format(number), fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleLarge, color = if (focused) Fm.Accent else Fm.TextFaint,
-                )
-                Text(
-                    if (item.type == BaseItemKind.EPISODE) item.seriesName ?: item.name ?: "" else item.name ?: "",
-                    style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                val sub = listOfNotNull(item.episodeLabel(), item.productionYear?.toString()?.takeIf { item.type != BaseItemKind.EPISODE })
-                if (sub.isNotEmpty()) Text(sub.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = Fm.TextFaint, maxLines = 1)
-            }
-        }
-    }
-}
-
-/** The focused recommendation, written over its own artwork while the panel is open. */
-@Composable
-private fun FocusedInfo(item: BaseItemDto, section: String?, repo: MediaRepository) {
-    val logo = remember(item.id) { if (item.type == BaseItemKind.EPISODE) null else repo.logo(item) }
-    Column(Modifier.width(440.dp)) {
-        section?.let { Overline(it) }
-        Spacer(Modifier.height(10.dp))
-        if (item.type == BaseItemKind.EPISODE) {
-            Text(item.seriesName ?: "", style = MaterialTheme.typography.titleMedium, color = Fm.TextDim)
-        }
-        if (logo != null) {
-            AsyncImage(logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart, modifier = Modifier.height(84.dp).width(340.dp))
-        } else {
-            Text(
-                (item.name ?: "").uppercase(), style = MaterialTheme.typography.displaySmall,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        MetaLine(metaParts(item))
-        item.overview?.let {
-            Text(
-                it, style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        item.progress?.let { p ->
-            Box(Modifier.padding(top = 12.dp).width(220.dp).clip(CircleShape)) { ProgressStripe(p) }
-        }
-    }
-}
-
 private fun typeLabel(item: BaseItemDto) = when (item.type) {
     BaseItemKind.MOVIE -> "Movie"
     BaseItemKind.SERIES -> "Series"
