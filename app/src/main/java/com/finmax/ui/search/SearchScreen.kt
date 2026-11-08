@@ -163,7 +163,7 @@ private fun Key(modifier: Modifier, label: String, icon: androidx.compose.ui.gra
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Fm.Surface, contentColor = Fm.TextDim,
-            focusedContainerColor = Fm.Gold, focusedContentColor = Fm.Bg,
+            focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {

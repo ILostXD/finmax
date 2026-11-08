@@ -408,7 +408,7 @@ private fun SubtitleOverlay(pc: PlayerController, liftForControls: Boolean) {
 fun SeekBar(position: Long, duration: Long, focused: Boolean, modifier: Modifier = Modifier) {
     val f = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     Box(modifier.fillMaxWidth().height(if (focused) 8.dp else 5.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(Fm.Gold, RoundedCornerShape(4.dp)))
+        Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(Fm.Accent, RoundedCornerShape(4.dp)))
     }
 }
 
@@ -454,7 +454,7 @@ private fun Controls(
                         .focusable(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    SeekBar(position, duration, seekFocused, if (seekFocused) Modifier.border(1.dp, Fm.Gold, RoundedCornerShape(4.dp)) else Modifier)
+                    SeekBar(position, duration, seekFocused, if (seekFocused) Modifier.border(1.dp, Fm.Accent, RoundedCornerShape(4.dp)) else Modifier)
                 }
                 Text("-" + fmt(duration - position), style = MaterialTheme.typography.labelLarge)
             }
@@ -512,7 +512,7 @@ private fun UpNext(
     ) {
         if (img != null) AsyncImage(img, null, modifier = Modifier.width(176.dp).height(99.dp).background(Fm.SurfaceHigh, RoundedCornerShape(8.dp)))
         Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(if (stillWatching) "Still watching?" else "Next episode", style = MaterialTheme.typography.labelMedium, color = Fm.Gold)
+            Text(if (stillWatching) "Still watching?" else "Next episode", style = MaterialTheme.typography.labelMedium, color = Fm.Accent)
             Text(listOfNotNull(next.episodeLabel(), next.name).joinToString("  "), style = MaterialTheme.typography.titleMedium, maxLines = 2)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton(if (countdown != null && left < countdown) "Play now · $left" else "Play now", onPlay, primary = true, modifier = Modifier.focusRequester(req))
@@ -573,7 +573,7 @@ private fun PlaybackInfo(pc: PlayerController, modifier: Modifier) {
         "Buffered: ${(pc.player.bufferedPosition - pc.positionMs).coerceAtLeast(0) / 1000} s",
     )
     Column(modifier.background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(12.dp)).padding(18.dp).widthIn(max = 520.dp)) {
-        Text("Playback info", style = MaterialTheme.typography.titleMedium, color = Fm.Gold)
+        Text("Playback info", style = MaterialTheme.typography.titleMedium, color = Fm.Accent)
         Spacer(Modifier.height(6.dp))
         lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Fm.Text) }
     }
@@ -588,7 +588,7 @@ private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> U
             if (pc.cues != null) {
                 item {
                     Column(Modifier.background(Fm.SurfaceHigh, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                        Text("Timing", style = MaterialTheme.typography.labelMedium, color = Fm.Gold)
+                        Text("Timing", style = MaterialTheme.typography.labelMedium, color = Fm.Accent)
                         Text(
                             if (pc.timing.isIdentity) "In original timing" else PlayerController.describe(pc.timing),
                             style = MaterialTheme.typography.titleLarge,
@@ -623,7 +623,7 @@ private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> U
             } else {
                 item { PillButton("Find subtitles…", onAssistant, modifier = Modifier.fillMaxWidth()) }
             }
-            item { Text("Tracks", style = MaterialTheme.typography.titleMedium, color = Fm.Gold, modifier = Modifier.padding(top = 10.dp)) }
+            item { Text("Tracks", style = MaterialTheme.typography.titleMedium, color = Fm.Accent, modifier = Modifier.padding(top = 10.dp)) }
             item { PillButton("Off", { pc.selectSubtitle(-1); onClose() }, primary = pc.subtitleIndex == null, modifier = Modifier.fillMaxWidth()) }
             items(pc.subtitleStreams.size) { i ->
                 val s = pc.subtitleStreams[i]
@@ -668,13 +668,13 @@ private fun AssistantPanel(a: SyncAssistant, pc: PlayerController, onApplied: ()
         androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(a.steps.size) { i -> Text("· " + a.steps[i], style = MaterialTheme.typography.bodyMedium, color = Fm.TextFaint) }
             if (a.running) item { Text("Analysing…", color = Fm.TextDim) }
-            a.busy?.let { b -> item { Text(b, color = Fm.Gold) } }
+            a.busy?.let { b -> item { Text(b, color = Fm.Accent) } }
             a.report?.let { r ->
                 item {
                     Column(Modifier.background(Fm.SurfaceHigh, RoundedCornerShape(12.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(r.headline, style = MaterialTheme.typography.titleLarge)
                         r.details.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim) }
-                        Text(r.recommendation, style = MaterialTheme.typography.bodyMedium, color = Fm.Gold)
+                        Text(r.recommendation, style = MaterialTheme.typography.bodyMedium, color = Fm.Accent)
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             val req = remember { FocusRequester() }
                             LaunchedEffect(Unit) { delay(50); runCatching { req.requestFocus() } }
@@ -689,7 +689,7 @@ private fun AssistantPanel(a: SyncAssistant, pc: PlayerController, onApplied: ()
                         }
                     }
                 }
-                if (a.candidates.isNotEmpty()) item { Text("Alternatives", style = MaterialTheme.typography.titleMedium, color = Fm.Gold) }
+                if (a.candidates.isNotEmpty()) item { Text("Alternatives", style = MaterialTheme.typography.titleMedium, color = Fm.Accent) }
                 items(a.candidates.size) { i ->
                     val c = a.candidates[i]
                     Column(Modifier.background(Fm.SurfaceHigh.copy(alpha = 0.6f), RoundedCornerShape(10.dp)).padding(12.dp)) {
@@ -698,7 +698,7 @@ private fun AssistantPanel(a: SyncAssistant, pc: PlayerController, onApplied: ()
                             (listOf(when (c.origin) { com.finmax.subtitles.Origin.TRACK -> "On server"; com.finmax.subtitles.Origin.REMOTE -> "Online (server provider)"; com.finmax.subtitles.Origin.BAZARR -> "Bazarr" }) + c.notes).joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall, color = Fm.TextFaint, maxLines = 3,
                         )
-                        c.status?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.Gold) }
+                        c.status?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.Accent) }
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (c.origin == com.finmax.subtitles.Origin.BAZARR) {
                                 PillButton("Download via Bazarr", { a.downloadBazarr(c) })
@@ -734,7 +734,7 @@ private fun LineSyncPanel(pc: PlayerController, a: SyncAssistant, onDone: () -> 
                 "Press OK on a line the moment you hear it spoken. One line fixes a constant delay; a second line at least a minute later also fixes drift.",
                 style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim,
             )
-            Text("Points set: ${a.points.size}/2 · ${PlayerController.describe(pc.timing)}", style = MaterialTheme.typography.labelMedium, color = Fm.Gold)
+            Text("Points set: ${a.points.size}/2 · ${PlayerController.describe(pc.timing)}", style = MaterialTheme.typography.labelMedium, color = Fm.Accent)
             window.forEachIndexed { i, cue ->
                 val req = remember(cue) { FocusRequester() }
                 if (i == 0) LaunchedEffect(Unit) { delay(50); runCatching { req.requestFocus() } }

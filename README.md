@@ -31,13 +31,25 @@ Kotlin, Jetpack Compose for TV (`tv-material`), Media3 ExoPlayer (+HLS, OkHttp d
 | `subtitles/` | SRT/VTT/ASS parser and timing model, `SyncAnalyzer` (alignment, unit tested), `SyncAssistant`, `SubtitleSources` (server subtitles, remote search, remembered corrections), `BazarrClient`. |
 | `ui/` | Screens (login, home, browse, search, details, player, settings, profiles) and shared components and theme. |
 
+## Design
+
+The look is built from the brand card in `reference/brand/` (palette, the finmax wordmark and "f" mark) and the two layouts in `reference/inspiration/`.
+
+- **Palette** (`ui/theme/Theme.kt`): Chlorophyll Void `#1B3100` is the base everything sits in; Taut Orchid `#8D3F7D` marks primary actions and the focus glow; Ionized Parchment `#FFF2C5` is the text colour and the focus fill.
+- **Type**: Archivo (variable, bundled in `res/font`, OFL). Expanded heavy cuts for titles and numbers, normal width for reading, semi-expanded tracked capitals for labels.
+- **Home** is a vertical carousel of random titles: artwork on the left, title, facts and actions on the right. Up/Down moves through it (it also advances every 10 s); Up on the first slide reaches the top bar, and so does Back. Right from the last button slides the artwork aside and opens the recommendations panel: Continue Watching, Next Up, new arrivals, My List, "Because you watched", collections and genre picks as one numbered vertical list. The focused title is described over its own artwork. Left or Back closes it.
+- **Details** show the artwork first, then fade in the title's local trailer or, if it has none, short muted clips of the film itself from random points (Settings → Details pages; off, trailers only, or trailers and clips, with optional sound). The header has the title, actions and a glass fact column (premiere, director, writers, music, genre, studio, runtime with end time) with a Watch Trailer tile. Below the fold come numbered sections: episodes, cast, more like this and file details.
+- **Screenshots without a TV**: `./gradlew :app:testDebugUnitTest -Pscreenshots` renders Home and details with a fake library into `app/build/screenshots/`.
+
 ## Feature status
 
 Tested on the target device (Chromecast with Google TV 4K, Android 14) against the Jellyfin 12.4 server.
 
+The redesigned Home and details screens (see Design) haven't been tried on the TV yet; the behaviour below was verified with the previous layout.
+
 **Implemented and verified on the TV**
 - Server discovery (UDP) and manual address, Quick Connect sign-in, remembered sessions, token encrypted with the Android Keystore.
-- Home: rotating spotlight with logo art, Continue Watching, Next Up, Recently Added per library, My List, "Because you watched" recommendations, collections, random genre rows, recently watched, libraries. The backdrop follows focus and focused rows show an info strip.
+- Home: featured titles, Continue Watching, Next Up, Recently Added per library, My List, "Because you watched" recommendations, collections, random genre picks, recently watched, libraries.
 - Movies and TV Shows grids with sort, filter (unwatched, watched, My List, in progress) and genre; paged loading.
 - Search with an on-screen TV keyboard.
 - Details: logo, ratings, critic score, tagline, cast and crew, tech badges, resume progress, seasons and episodes, More like this, collection contents, My List, mark watched.

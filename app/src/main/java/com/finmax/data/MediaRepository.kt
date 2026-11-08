@@ -151,6 +151,23 @@ class MediaRepository(private val session: Session) {
 
     suspend fun currentUser() = api.userApi.getCurrentUser().content
 
+    /** Random movies and shows that have widescreen art, for the Home carousel. */
+    suspend fun featured(limit: Int = 8): List<BaseItemDto> = items(
+        types = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), sort = SortChoice.RANDOM, limit = limit * 3,
+    ).items.filter { !it.backdropImageTags.isNullOrEmpty() }.take(limit)
+
+    /** Trailers stored next to the media on the server (remote YouTube trailers can't be played here). */
+    suspend fun localTrailers(id: UUID): List<BaseItemDto> =
+        api.userLibraryApi.getLocalTrailers(itemId = id, userId = userId).content
+
+    // ---- Raw streams (background video) -----------------------------------------------------
+
+    val authHeader: String get() = session.authHeader
+
+    /** The original file, untouched. Only for direct-playable sources. */
+    fun staticStreamUrl(id: UUID, mediaSourceId: String? = null): String =
+        "${session.server.url.trimEnd('/')}/Videos/$id/stream?static=true" + (mediaSourceId?.let { "&mediaSourceId=$it" } ?: "")
+
     // ---- Images ----------------------------------------------------------------------------
 
     private fun image(id: UUID, type: ImageType, tag: String?, width: Int, index: Int? = null): String? =

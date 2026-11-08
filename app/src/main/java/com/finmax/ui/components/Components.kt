@@ -38,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -54,10 +56,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Glow
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -68,6 +72,9 @@ import com.finmax.ui.theme.Fm
 import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+
+val ButtonShape = RoundedCornerShape(6.dp)
+val CardShape = RoundedCornerShape(8.dp)
 
 // ---- Scrolling ------------------------------------------------------------------------------
 
@@ -138,24 +145,67 @@ fun PillButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        shape = ClickableSurfaceDefaults.shape(CircleShape),
+        shape = ClickableSurfaceDefaults.shape(ButtonShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) Fm.Text else Color.White.copy(alpha = 0.12f),
-            contentColor = if (primary) Fm.Bg else Fm.Text,
-            focusedContainerColor = Fm.Gold,
-            focusedContentColor = Fm.Bg,
-            disabledContainerColor = Color.White.copy(alpha = 0.05f),
+            containerColor = if (primary) Fm.Orchid else Color.White.copy(alpha = 0.09f),
+            contentColor = if (primary) Fm.Parchment else Fm.Text,
+            focusedContainerColor = Fm.Focus,
+            focusedContentColor = Fm.OnFocus,
+            disabledContainerColor = Color.White.copy(alpha = 0.04f),
             disabledContentColor = Fm.TextFaint,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Orchid.copy(alpha = 0.55f), 14.dp)),
     ) {
         Row(
-            Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+            Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (icon != null) Icon(icon, null, Modifier.size(20.dp))
+            if (icon != null) Icon(icon, null, Modifier.size(18.dp))
             Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * Editorial text action ("LEARN MORE  ⟶" in the reference art): tracked uppercase label with a
+ * hairline arrow. No fill until focused, then the parchment focus fill.
+ */
+@Composable
+fun GhostButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    arrow: Boolean = false,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = ClickableSurfaceDefaults.shape(ButtonShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Fm.Text,
+            focusedContainerColor = Fm.Focus,
+            focusedContentColor = Fm.OnFocus,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border(BorderStroke(1.dp, Fm.Text.copy(alpha = 0.28f)), shape = ButtonShape),
+            focusedBorder = Border(BorderStroke(1.dp, Fm.Focus), shape = ButtonShape),
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (icon != null) Icon(icon, null, Modifier.size(17.dp))
+            Text(text.uppercase(), style = MaterialTheme.typography.labelLarge, letterSpacing = 1.2.sp, maxLines = 1)
+            if (arrow) {
+                Box(Modifier.padding(start = 4.dp).width(22.dp).height(1.dp).background(LocalContentColor.current))
+            }
         }
     }
 }
@@ -167,10 +217,10 @@ fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
         modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.10f),
-            contentColor = if (active) Fm.Gold else Fm.Text,
-            focusedContainerColor = Fm.Gold,
-            focusedContentColor = Fm.Bg,
+            containerColor = Color.White.copy(alpha = 0.08f),
+            contentColor = if (active) Fm.Accent else Fm.Text,
+            focusedContainerColor = Fm.Focus,
+            focusedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {
@@ -178,12 +228,12 @@ fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
     }
 }
 
-/** Generic focusable tile with the FINMAX focus treatment: gold ring, soft glow, gentle lift. */
+/** Generic focusable tile with the FINMAX focus treatment: parchment ring, orchid bloom, gentle lift. */
 @Composable
 fun FocusTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(10.dp),
+    shape: Shape = CardShape,
     focusedScale: Float = 1.07f,
     onFocused: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -196,8 +246,8 @@ fun FocusTile(
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
         scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Fm.Gold), shape = shape)),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Gold.copy(alpha = 0.35f), 10.dp)),
+        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Fm.Focus), shape = shape)),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Orchid.copy(alpha = 0.6f), 16.dp)),
         content = content,
     )
 }
@@ -270,14 +320,14 @@ fun MediaCard(
         }
         if (item.userData?.played == true) {
             Icon(
-                Icons.Filled.CheckCircle, "Watched", tint = Fm.Gold,
+                Icons.Filled.CheckCircle, "Watched", tint = Fm.Accent,
                 modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(18.dp).background(Fm.Bg, CircleShape),
             )
         }
         item.userData?.unplayedItemCount?.takeIf { it > 0 && item.type == BaseItemKind.SERIES }?.let {
             Text(
                 "$it", style = MaterialTheme.typography.labelSmall, color = Fm.Bg,
-                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(Fm.Gold, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(Fm.Accent, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
             )
         }
         item.progress?.let { ProgressStripe(it, Modifier.align(Alignment.BottomCenter)) }
@@ -286,8 +336,8 @@ fun MediaCard(
 
 @Composable
 fun ProgressStripe(fraction: Float, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.25f))) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Fm.Gold))
+    Box(modifier.fillMaxWidth().height(4.dp).background(Fm.Parchment.copy(alpha = 0.22f))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Fm.Accent))
     }
 }
 
@@ -303,10 +353,11 @@ fun MediaRow(
     state: LazyListState = rememberLazyListState(),
     onFocused: ((BaseItemDto) -> Unit)? = null,
     initialFocus: Boolean = false,
+    showTitle: Boolean = true,
 ) {
     val nav = com.finmax.ui.LocalNav.current
     Column(modifier) {
-        SectionTitle(title)
+        if (showTitle) SectionTitle(title)
         LazyRow(
             state = state,
             contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 12.dp),
@@ -327,12 +378,29 @@ fun MediaRow(
 }
 
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleLarge,
-        color = Fm.Text,
-        modifier = modifier.padding(start = Fm.SafeH, top = 14.dp),
+fun SectionTitle(text: String, modifier: Modifier = Modifier, index: Int? = null) {
+    Row(
+        modifier.padding(start = Fm.SafeH, top = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (index != null) Text("%02d".format(index), style = MaterialTheme.typography.labelSmall, color = Fm.Accent)
+        Text(text, style = MaterialTheme.typography.headlineSmall, color = Fm.Text)
+    }
+}
+
+/** Tracked uppercase label ("PREMIERE", "DIRECTOR") used above facts and section titles. */
+@Composable
+fun Overline(text: String, modifier: Modifier = Modifier, color: Color = Fm.Accent) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = color, modifier = modifier, maxLines = 1)
+}
+
+/** Thin parchment rule, the hairline that structures the reference layouts. */
+@Composable
+fun Hairline(modifier: Modifier = Modifier, vertical: Boolean = false, alpha: Float = 0.18f) {
+    Box(
+        (if (vertical) modifier.fillMaxHeight().width(1.dp) else modifier.fillMaxWidth().height(1.dp))
+            .background(Fm.Parchment.copy(alpha = alpha)),
     )
 }
 
@@ -355,7 +423,7 @@ fun SkeletonRow(style: CardStyle = CardStyle.LANDSCAPE, count: Int = 5) {
                 Box(
                     Modifier.width(if (style == CardStyle.LANDSCAPE) 248.dp else 140.dp)
                         .aspectRatio(if (style == CardStyle.LANDSCAPE) 16f / 9f else 2f / 3f)
-                        .clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = a)),
+                        .clip(CardShape).background(Color.White.copy(alpha = a)),
                 )
             }
         }
@@ -390,18 +458,55 @@ fun MessagePanel(
 fun ErrorPanel(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) =
     MessagePanel("Couldn't load this", message, modifier, "Try again", onRetry)
 
-/** Dims and fades a full-bleed backdrop so foreground text stays readable on any artwork. */
+/**
+ * Full-bleed artwork washed into the Chlorophyll Void base so foreground text stays readable.
+ * [textSide] is where the text sits: the artwork fades to the base colour on that side.
+ */
 @Composable
-fun BackdropImage(url: String?, modifier: Modifier = Modifier, dim: Float = 0f) {
-    Box(modifier.fillMaxSize()) {
+fun BackdropImage(
+    url: String?,
+    modifier: Modifier = Modifier,
+    dim: Float = 0f,
+    textSide: Alignment.Horizontal = Alignment.Start,
+) {
+    Box(modifier.fillMaxSize().background(Fm.Bg)) {
         if (url != null) {
             AsyncImage(
                 model = url, contentDescription = null, contentScale = ContentScale.Crop,
-                alignment = Alignment.TopEnd, modifier = Modifier.fillMaxSize(),
+                alignment = if (textSide == Alignment.End) Alignment.CenterStart else Alignment.TopEnd,
+                modifier = Modifier.fillMaxSize(),
             )
         }
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Fm.Bg, 0.38f to Fm.Bg.copy(alpha = 0.75f), 0.75f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Fm.Bg)))
+        BackdropScrim(textSide)
         if (dim > 0f) Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = dim)))
     }
+}
+
+/** The gradients of [BackdropImage], separately so video layers can sit under them too. */
+@Composable
+fun BackdropScrim(textSide: Alignment.Horizontal = Alignment.Start) {
+    // A faint green wash over all artwork ties every title into the palette.
+    Box(Modifier.fillMaxSize().background(Fm.Void.copy(alpha = 0.18f)))
+    val side = if (textSide == Alignment.End) {
+        Brush.horizontalGradient(0.3f to Color.Transparent, 0.62f to Fm.Bg.copy(alpha = 0.78f), 1f to Fm.Bg.copy(alpha = 0.95f))
+    } else {
+        Brush.horizontalGradient(0f to Fm.Bg, 0.36f to Fm.Bg.copy(alpha = 0.78f), 0.72f to Color.Transparent)
+    }
+    Box(Modifier.fillMaxSize().background(side))
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.55f), 0.22f to Color.Transparent, 0.55f to Color.Transparent, 1f to Fm.Bg)))
+}
+
+/**
+ * The brand field from the palette card: Chlorophyll Void melting into Taut Orchid with a
+ * Parchment glow. Used where there is no artwork (sign-in, profiles, empty states).
+ */
+@Composable
+fun BrandBackdrop(modifier: Modifier = Modifier) {
+    Box(
+        modifier.fillMaxSize().background(Fm.Bg).drawBehind {
+            drawRect(Brush.radialGradient(listOf(Fm.Void, Color.Transparent), center = Offset(size.width * 0.1f, size.height * 0.05f), radius = size.width * 0.75f))
+            drawRect(Brush.radialGradient(listOf(Fm.Orchid.copy(alpha = 0.75f), Color.Transparent), center = Offset(size.width * 0.82f, size.height * 1.0f), radius = size.width * 0.6f))
+            drawRect(Brush.radialGradient(listOf(Fm.Parchment.copy(alpha = 0.32f), Color.Transparent), center = Offset(size.width * 0.98f, size.height * 1.12f), radius = size.width * 0.32f))
+        },
+    )
 }

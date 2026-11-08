@@ -7,6 +7,13 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class SegmentAction { ASK, AUTO, OFF }
 
+/** What plays behind a details page once it has settled. */
+enum class DetailVideo(val label: String) {
+    OFF("Off"),
+    TRAILERS("Trailers only"),
+    CLIPS("Trailers and movie clips"),
+}
+
 data class AppSettings(
     val maxBitrateMbps: Int = 0, // 0 = unlimited, let the server decide by profile
     val autoplayNext: Boolean = true,
@@ -27,6 +34,8 @@ data class AppSettings(
     val homeCollections: Boolean = true,
     val homeGenres: Boolean = true,
     val bazarrUrl: String = "",
+    val detailVideo: DetailVideo = DetailVideo.CLIPS,
+    val detailVideoSound: Boolean = false,
 )
 
 /** Non-secret app preferences. Secrets (Bazarr API key, tokens) live in [SecureStore]. */
@@ -63,6 +72,8 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             .putBoolean("hColl", s.homeCollections)
             .putBoolean("hGenres", s.homeGenres)
             .putString("bazarrUrl", s.bazarrUrl)
+            .putString("detailVideo", s.detailVideo.name)
+            .putBoolean("detailVideoSound", s.detailVideoSound)
             .apply()
     }
 
@@ -90,6 +101,8 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             homeCollections = prefs.getBoolean("hColl", d.homeCollections),
             homeGenres = prefs.getBoolean("hGenres", d.homeGenres),
             bazarrUrl = prefs.getString("bazarrUrl", d.bazarrUrl)!!,
+            detailVideo = runCatching { DetailVideo.valueOf(prefs.getString("detailVideo", d.detailVideo.name)!!) }.getOrDefault(d.detailVideo),
+            detailVideoSound = prefs.getBoolean("detailVideoSound", d.detailVideoSound),
         )
     }
 }

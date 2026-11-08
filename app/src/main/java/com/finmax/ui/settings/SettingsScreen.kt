@@ -111,13 +111,21 @@ fun SettingsScreen() {
                 }
             }
 
+            item { Header("Details pages") }
+            item {
+                Choice("Background video", s.detailVideo.label) {
+                    set { it.copy(detailVideo = com.finmax.data.DetailVideo.entries.after(it.detailVideo)) }
+                }
+            }
+            item { Toggle("Background video sound", s.detailVideoSound) { set { it.copy(detailVideoSound = !it.detailVideoSound) } } }
+
             item { Header("Home screen") }
             item { Toggle("Continue Watching", s.homeContinue) { set { it.copy(homeContinue = !it.homeContinue) } } }
             item { Toggle("Next Up", s.homeNextUp) { set { it.copy(homeNextUp = !it.homeNextUp) } } }
             item { Toggle("Recently added", s.homeLatest) { set { it.copy(homeLatest = !it.homeLatest) } } }
             item { Toggle("My List", s.homeFavorites) { set { it.copy(homeFavorites = !it.homeFavorites) } } }
             item { Toggle("Collections", s.homeCollections) { set { it.copy(homeCollections = !it.homeCollections) } } }
-            item { Toggle("Genre rows", s.homeGenres) { set { it.copy(homeGenres = !it.homeGenres) } } }
+            item { Toggle("Genre picks", s.homeGenres) { set { it.copy(homeGenres = !it.homeGenres) } } }
 
             item { Header("Bazarr (optional)") }
             item { BazarrSettings() }
@@ -147,7 +155,7 @@ private fun segLabel(a: SegmentAction) = when (a) {
 
 @Composable
 private fun Header(text: String) =
-    Text(text, style = MaterialTheme.typography.titleLarge, color = Fm.Gold, modifier = Modifier.padding(top = 22.dp, bottom = 4.dp))
+    Text(text, style = MaterialTheme.typography.titleLarge, color = Fm.Accent, modifier = Modifier.padding(top = 22.dp, bottom = 4.dp))
 
 @Composable
 private fun Choice(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -160,13 +168,13 @@ private fun Choice(label: String, value: String, modifier: Modifier = Modifier, 
             focusedContainerColor = Fm.SurfaceHigh, focusedContentColor = Fm.Text,
         ),
         border = ClickableSurfaceDefaults.border(
-            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, Fm.Gold), shape = RoundedCornerShape(10.dp)),
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, Fm.Accent), shape = RoundedCornerShape(10.dp)),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.01f),
     ) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.titleMedium, color = Fm.Gold)
+            Text(value, style = MaterialTheme.typography.titleMedium, color = Fm.Accent)
         }
     }
 }

@@ -29,6 +29,7 @@ android {
     }
     kotlin { jvmToolchain(17) }
     buildFeatures { compose = true; buildConfig = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1,INDEX.LIST,versions/9/previous-compilation-data.bin}" }
 }
 
@@ -56,4 +57,23 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
     testImplementation("junit:junit:4.13.2")
+
+    // Design screenshots (opt-in, see below): renders real screens with fake library data on the JVM.
+    testImplementation(composeBom)
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.78.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.78.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// `./gradlew :app:testDebugUnitTest -Pscreenshots` writes PNGs to app/build/screenshots/.
+// Skipped by default: they download a Robolectric Android runtime and take a few minutes.
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("screenshots")) {
+        systemProperty("roborazzi.test.record", "true")
+        maxHeapSize = "3g"
+    } else {
+        exclude("**/screenshots/**")
+    }
 }

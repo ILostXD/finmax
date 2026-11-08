@@ -39,8 +39,10 @@ fun ProfilesScreen() {
     val scope = rememberCoroutineScope()
     var version by remember { mutableIntStateOf(0) } // bump to re-read saved lists after changes
 
+    com.finmax.ui.components.BrandBackdrop()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
+            com.finmax.ui.components.Wordmark(20.dp, Modifier.padding(bottom = 28.dp))
             Text("Profiles & servers", style = MaterialTheme.typography.displayMedium)
             Text("Signed in as ${current?.user?.name} on ${current?.server?.name}", color = Fm.TextDim, style = MaterialTheme.typography.bodyLarge)
         }

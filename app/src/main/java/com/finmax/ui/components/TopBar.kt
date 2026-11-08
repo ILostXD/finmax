@@ -1,6 +1,8 @@
 package com.finmax.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +24,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -36,20 +38,19 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.finmax.FinmaxApp
+import com.finmax.R
 import com.finmax.ui.LocalNav
 import com.finmax.ui.Route
 import com.finmax.ui.theme.Fm
 
+/** The finmax wordmark (brand art in res/drawable-nodpi), tinted parchment by default. */
 @Composable
-fun Wordmark(size: Int = 22) {
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = Fm.Text)) { append("FIN") }
-            withStyle(SpanStyle(color = Fm.Gold)) { append("MAX") }
-        },
-        fontSize = size.sp,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 1.5.sp,
+fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier, gradient: Boolean = false, tint: Color = Fm.Parchment) {
+    Image(
+        painterResource(if (gradient) R.drawable.finmax_wordmark_gradient else R.drawable.finmax_wordmark),
+        contentDescription = "finmax",
+        colorFilter = if (gradient) null else ColorFilter.tint(tint),
+        modifier = modifier.height(height),
     )
 }
 
@@ -68,14 +69,14 @@ fun TopBar(current: Route.Tab, modifier: Modifier = Modifier) {
         modifier.fillMaxWidth().padding(start = Fm.SafeH, end = Fm.SafeH, top = Fm.SafeV, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Wordmark()
-        Spacer(Modifier.width(36.dp))
-        IconButton(Icons.Filled.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search)
-        Spacer(Modifier.width(10.dp))
+        Wordmark(20.dp)
+        Spacer(Modifier.width(44.dp))
         tabs.forEach { (route, label) ->
             TabItem(label, selected = current == route) { nav.tab(route) }
         }
         Spacer(Modifier.weight(1f))
+        IconButton(Icons.Filled.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search)
+        Spacer(Modifier.width(10.dp))
         IconButton(Icons.Filled.Settings, "Settings", { nav.tab(Route.Settings) }, active = current == Route.Settings)
         Spacer(Modifier.width(10.dp))
         Avatar { nav.push(Route.Profiles) }
@@ -86,21 +87,21 @@ fun TopBar(current: Route.Tab, modifier: Modifier = Modifier) {
 private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        shape = ClickableSurfaceDefaults.shape(ButtonShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = if (selected) Fm.Text else Fm.TextDim,
-            focusedContainerColor = Fm.Gold,
-            focusedContentColor = Fm.Bg,
+            focusedContainerColor = Fm.Focus,
+            focusedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         modifier = Modifier.padding(horizontal = 2.dp),
     ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        Column(Modifier.padding(horizontal = 13.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
             Box(
-                Modifier.padding(top = 3.dp).size(width = 16.dp, height = 2.dp)
-                    .background(if (selected) Fm.Gold else Color.Transparent, RoundedCornerShape(1.dp)),
+                Modifier.padding(top = 3.dp).size(width = 14.dp, height = 2.dp)
+                    .background(if (selected) Fm.Accent else Color.Transparent, RoundedCornerShape(1.dp)),
             )
         }
     }
@@ -112,7 +113,7 @@ private fun Avatar(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(CircleShape),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.Gold),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.Focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
     ) {
         Box(Modifier.size(40.dp).padding(3.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
@@ -141,8 +142,9 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.labelSmall,
+        letterSpacing = 0.8.sp,
         color = Fm.TextDim,
-        modifier = modifier.clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.10f)).padding(horizontal = 5.dp, vertical = 1.dp),
+        modifier = modifier.clip(RoundedCornerShape(3.dp)).border(1.dp, Fm.Parchment.copy(alpha = 0.3f), RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
 

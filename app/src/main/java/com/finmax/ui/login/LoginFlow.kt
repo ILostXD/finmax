@@ -92,9 +92,10 @@ fun LoginFlow() {
     }
     BackHandler(enabled = back != null) { step = back!! }
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF16202E), Fm.Bg), radius = 1400f))) {
+    Box(Modifier.fillMaxSize()) {
+        com.finmax.ui.components.BrandBackdrop()
         Column(Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 48.dp)) {
-            Wordmark(30)
+            Wordmark(44.dp)
             Spacer(Modifier.height(36.dp))
             when (val s = step) {
                 Step.Servers -> ServerList(onPick = { step = Step.Users(it) }, onAdd = { step = Step.AddServer })
@@ -148,8 +149,8 @@ private fun ChoiceTile(
             Box(Modifier.size(44.dp).clip(CircleShape).background(Fm.SurfaceHigh), contentAlignment = Alignment.Center) {
                 when {
                     imageUrl != null -> AsyncImage(imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    icon != null -> Icon(icon, null, tint = Fm.Gold)
-                    else -> Text("+", style = MaterialTheme.typography.headlineMedium, color = Fm.Gold)
+                    icon != null -> Icon(icon, null, tint = Fm.Accent)
+                    else -> Text("+", style = MaterialTheme.typography.headlineMedium, color = Fm.Accent)
                 }
             }
             Column {
@@ -321,7 +322,7 @@ private fun QuickConnectLogin(server: SavedServer, onCancel: () -> Unit) {
     Heading("Quick Connect", "On a device that's already signed in, open Jellyfin → your profile → Quick Connect, and enter this code.")
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.border(BorderStroke(2.dp, Fm.Gold.copy(alpha = 0.6f)), RoundedCornerShape(16.dp)).background(Fm.Surface, RoundedCornerShape(16.dp))
+            Modifier.border(BorderStroke(2.dp, Fm.Accent.copy(alpha = 0.6f)), RoundedCornerShape(16.dp)).background(Fm.Surface, RoundedCornerShape(16.dp))
                 .padding(horizontal = 40.dp, vertical = 24.dp),
         ) {
             Text(
@@ -371,7 +372,7 @@ fun FmTextField(
     }
     val shape = RoundedCornerShape(10.dp)
     Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = if (focused || editing) Fm.Gold else Fm.TextDim)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = if (focused || editing) Fm.Accent else Fm.TextDim)
         Spacer(Modifier.height(6.dp))
         if (editing) {
             BasicTextField(
@@ -379,7 +380,7 @@ fun FmTextField(
                 onValueChange = onChange,
                 singleLine = true,
                 textStyle = TextStyle(color = Fm.Text, fontSize = 18.sp),
-                cursorBrush = SolidColor(Fm.Gold),
+                cursorBrush = SolidColor(Fm.Accent),
                 visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done, autoCorrectEnabled = false),
                 keyboardActions = KeyboardActions(onDone = {
@@ -388,7 +389,7 @@ fun FmTextField(
                 }),
                 modifier = Modifier.fillMaxWidth().focusRequester(fieldReq)
                     .onFocusChanged { if (!it.isFocused && editing) editing = false }
-                    .background(Fm.Surface, shape).border(BorderStroke(2.dp, Fm.Gold), shape)
+                    .background(Fm.Surface, shape).border(BorderStroke(2.dp, Fm.Accent), shape)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             )
         } else {
@@ -399,7 +400,7 @@ fun FmTextField(
                 colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
                 border = androidx.tv.material3.ClickableSurfaceDefaults.border(
                     border = androidx.tv.material3.Border(BorderStroke(2.dp, Fm.Outline), shape = shape),
-                    focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Fm.Gold), shape = shape),
+                    focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Fm.Accent), shape = shape),
                 ),
                 scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1f),
             ) {

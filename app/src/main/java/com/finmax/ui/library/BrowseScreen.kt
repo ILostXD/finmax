@@ -209,13 +209,17 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
 /** Right-hand overlay panel used for pickers (genres, tracks, settings choices). */
 @Composable
 fun SidePanel(title: String, width: androidx.compose.ui.unit.Dp = 360.dp, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.55f))) {
-        Column(
-            Modifier.align(androidx.compose.ui.Alignment.CenterEnd).fillMaxHeight().width(width)
-                .background(Fm.Surface).padding(horizontal = 28.dp, vertical = Fm.SafeV),
-        ) {
-            Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 18.dp))
-            content()
+    Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.6f))) {
+        Row(Modifier.align(androidx.compose.ui.Alignment.CenterEnd).fillMaxHeight().width(width)) {
+            com.finmax.ui.components.Hairline(vertical = true, alpha = 0.2f)
+            Column(
+                Modifier.fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Fm.SurfaceHigh, Fm.Surface)))
+                    .padding(horizontal = 28.dp, vertical = Fm.SafeV),
+            ) {
+                Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 18.dp))
+                content()
+            }
         }
     }
 }
