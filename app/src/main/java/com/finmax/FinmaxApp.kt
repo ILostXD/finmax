@@ -25,7 +25,12 @@ import org.jellyfin.sdk.model.ClientInfo
 import java.util.concurrent.TimeUnit
 
 /** Process-wide singletons. Plain constructor wiring; small enough not to need a DI framework. */
-class FinmaxApp : Application(), SingletonImageLoader.Factory {
+open class FinmaxApp : Application(), SingletonImageLoader.Factory {
+    // Seams for the screenshot tests, which run the whole app against a fake server on the JVM.
+    protected open fun createSecureStore(): SecureStore = SecureStore(this)
+    protected open fun configureHttp(builder: OkHttpClient.Builder): OkHttpClient.Builder = builder
+    protected open fun deviceInfo(): org.jellyfin.sdk.model.DeviceInfo = androidDevice(this)
+
     lateinit var secure: SecureStore private set
     lateinit var settings: SettingsStore private set
     lateinit var sessions: SessionManager private set
@@ -49,19 +54,20 @@ class FinmaxApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        secure = SecureStore(this)
+        secure = createSecureStore()
         settings = SettingsStore(this, secure)
-        http = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
+        http = configureHttp(
+            OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS),
+        ).build()
         val okHttpFactory = org.jellyfin.sdk.api.okhttp.OkHttpFactory(http)
         val jellyfin = createJellyfin {
             context = this@FinmaxApp
             apiClientFactory = com.finmax.data.IoApiClientFactory(okHttpFactory)
             socketConnectionFactory = okHttpFactory
             clientInfo = ClientInfo(name = "FINMAX", version = BuildConfig.VERSION_NAME)
-            deviceInfo = androidDevice(this@FinmaxApp)
+            deviceInfo = this@FinmaxApp.deviceInfo()
         }
         sessions = SessionManager(this, jellyfin, secure)
         sessions.restore()

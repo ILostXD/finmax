@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,9 +95,9 @@ fun LoginFlow() {
 
     Box(Modifier.fillMaxSize()) {
         com.finmax.ui.components.BrandBackdrop()
-        Column(Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 48.dp)) {
-            Wordmark(44.dp)
-            Spacer(Modifier.height(36.dp))
+        Column(Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = Fm.SafeV + 6.dp)) {
+            Wordmark(32.dp)
+            Spacer(Modifier.height(22.dp))
             when (val s = step) {
                 Step.Servers -> ServerList(onPick = { step = Step.Users(it) }, onAdd = { step = Step.AddServer })
                 Step.AddServer -> AddServer(onFound = { step = Step.Users(it) })
@@ -117,14 +118,14 @@ private fun Heading(title: String, subtitle: String) {
     Text(title, style = MaterialTheme.typography.displayMedium)
     Spacer(Modifier.height(8.dp))
     Text(subtitle, style = MaterialTheme.typography.bodyLarge, color = Fm.TextDim)
-    Spacer(Modifier.height(28.dp))
+    Spacer(Modifier.height(18.dp))
 }
 
 @Composable
 private fun ServerList(onPick: (SavedServer) -> Unit, onAdd: () -> Unit) {
     val sessions = FinmaxApp.instance.sessions
     Heading("Choose a server", "Pick up where you left off, or connect to another Jellyfin server.")
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.padding(start = (-12).dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
         items(sessions.servers, key = { it.id }) { server ->
             val first = server == sessions.servers.first()
             ChoiceTile(server.name, server.url, Icons.Filled.Dns, onClick = { onPick(server) }, requestFocus = first)
@@ -206,7 +207,7 @@ private fun AddServer(onFound: (SavedServer) -> Unit) {
         style = MaterialTheme.typography.titleMedium, color = Fm.TextDim,
     )
     Spacer(Modifier.height(14.dp))
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.padding(start = (-12).dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
         items(discovered, key = { it.second }) { (name, addr) ->
             ChoiceTile(name, addr, Icons.Filled.Dns, onClick = { address = addr; connect(addr) })
         }
@@ -225,24 +226,21 @@ private fun UserPicker(server: SavedServer, onQuickConnect: () -> Unit, onPasswo
     val saved = sessions.usersOf(server.id)
 
     Heading("Who's watching?", "Signing in to ${server.name}")
-    if (saved.isNotEmpty()) {
-        Text("Signed in on this TV", style = MaterialTheme.typography.titleMedium, color = Fm.TextDim)
-        Spacer(Modifier.height(12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.padding(start = (-12).dp)) {
-            items(saved, key = { it.userId }) { u ->
-                val img = u.imageTag?.let { "${server.url.trimEnd('/')}/Users/${u.userId}/Images/Primary?tag=$it&maxWidth=120" }
-                ChoiceTile(u.name, "Continue", Icons.Filled.Person, { sessions.activate(u) }, img, requestFocus = u == saved.first())
-            }
-        }
-        Spacer(Modifier.height(28.dp))
-    }
-    Text("Add an account", style = MaterialTheme.typography.titleMedium, color = Fm.TextDim)
+    // One row: two rows of tiles don't fit on a TV screen. Saved profiles first, then ways to add one.
+    Text(
+        if (saved.isNotEmpty()) "Signed in on this TV, or add an account" else "Add an account",
+        style = MaterialTheme.typography.titleMedium, color = Fm.TextDim,
+    )
     Spacer(Modifier.height(12.dp))
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.padding(start = (-12).dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
+        items(saved, key = { "saved/" + it.userId }) { u ->
+            val img = u.imageTag?.let { "${server.url.trimEnd('/')}/Users/${u.userId}/Images/Primary?tag=$it&maxWidth=120" }
+            ChoiceTile(u.name, "Continue", Icons.Filled.Person, { sessions.activate(u) }, img, requestFocus = u == saved.first())
+        }
         if (qcEnabled == true) {
             item { ChoiceTile("Quick Connect", "Approve from your phone", null, onQuickConnect, requestFocus = saved.isEmpty()) }
         }
-        items(publicUsers, key = { it.id }) { u ->
+        items(publicUsers.filter { p -> saved.none { it.userId.replace("-", "") == p.id.toString().replace("-", "") } }, key = { it.id }) { u ->
             val img = u.primaryImageTag?.let { "${server.url.trimEnd('/')}/Users/${u.id}/Images/Primary?tag=$it&maxWidth=120" }
             ChoiceTile(u.name ?: "User", "Password", Icons.Filled.Person, { onPassword(u.name ?: "") }, img)
         }

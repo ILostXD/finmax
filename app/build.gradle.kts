@@ -64,6 +64,7 @@ dependencies {
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.78.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.78.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0") // fake server responses
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 

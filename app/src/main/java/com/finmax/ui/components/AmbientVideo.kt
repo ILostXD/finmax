@@ -40,7 +40,9 @@ import com.finmax.FinmaxApp
 import com.finmax.data.DetailVideo
 import com.finmax.ui.LocalEntry
 import com.finmax.ui.LocalNav
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -131,35 +133,38 @@ fun AmbientVideo(item: BaseItemDto, playing: Boolean, modifier: Modifier = Modif
     LaunchedEffect(player, texture) {
         val p = player ?: return@LaunchedEffect
         val view = texture ?: return@LaunchedEffect
-        p.setVideoTextureView(view)
-        delay(SETTLE_MS)
-        val repo = app.repo
-        val trailer = runCatching { repo.localTrailers(item.id).firstOrNull() }.getOrNull()
-        if (trailer != null) {
-            p.setMediaItem(MediaItem.fromUri(repo.staticStreamUrl(trailer.id)))
+        // ExoPlayer must only be touched on the main thread, whatever the effect's dispatcher.
+        withContext(Dispatchers.Main.immediate) {
+            p.setVideoTextureView(view)
+            delay(SETTLE_MS)
+            val repo = app.repo
+            val trailer = runCatching { repo.localTrailers(item.id).firstOrNull() }.getOrNull()
+            if (trailer != null) {
+                p.setMediaItem(MediaItem.fromUri(repo.staticStreamUrl(trailer.id)))
+                p.prepare()
+                p.playWhenReady = true
+                if (p.awaitPlaying()) shown = true
+                return@withContext
+            }
+            val source = item.mediaSources?.firstOrNull()
+            val runtimeMs = (item.runTimeTicks ?: 0) / 10_000
+            val clipsAllowed = mode == DetailVideo.CLIPS &&
+                item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE, BaseItemKind.VIDEO) &&
+                runtimeMs > 10 * 60_000 && source?.supportsDirectPlay != false
+            if (!clipsAllowed) return@withContext
+            p.setMediaItem(MediaItem.fromUri(repo.staticStreamUrl(item.id, source?.id)), randomPoint(runtimeMs))
             p.prepare()
             p.playWhenReady = true
-            if (p.awaitPlaying()) shown = true
-            return@LaunchedEffect
-        }
-        val source = item.mediaSources?.firstOrNull()
-        val runtimeMs = (item.runTimeTicks ?: 0) / 10_000
-        val clipsAllowed = mode == DetailVideo.CLIPS &&
-            item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE, BaseItemKind.VIDEO) &&
-            runtimeMs > 10 * 60_000 && source?.supportsDirectPlay != false
-        if (!clipsAllowed) return@LaunchedEffect
-        p.setMediaItem(MediaItem.fromUri(repo.staticStreamUrl(item.id, source?.id)), randomPoint(runtimeMs))
-        p.prepare()
-        p.playWhenReady = true
-        while (true) {
-            if (!p.awaitPlaying()) return@LaunchedEffect // can't decode this file here: stay on the artwork
-            delay(350) // past the post-seek keyframe smear
-            shown = true
-            delay(CLIP_MS)
-            shown = false
-            delay(900) // let the fade finish before jumping
-            p.seekTo(randomPoint(runtimeMs))
-            delay(600) // let the player leave READY before waiting for it again
+            while (true) {
+                if (!p.awaitPlaying()) return@withContext // can't decode this file here: stay on the artwork
+                delay(350) // past the post-seek keyframe smear
+                shown = true
+                delay(CLIP_MS)
+                shown = false
+                delay(900) // let the fade finish before jumping
+                p.seekTo(randomPoint(runtimeMs))
+                delay(600) // let the player leave READY before waiting for it again
+            }
         }
     }
 

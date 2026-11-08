@@ -7,7 +7,8 @@ Native Android TV Jellyfin client (Kotlin, Compose for TV, Media3, Jellyfin SDK 
 - Needs JDK 17 and an Android SDK with platform 36 (`ANDROID_HOME` or `local.properties` with `sdk.dir`).
 - `./gradlew :app:testDebugUnitTest` runs the subtitle sync tests (pure JVM, no device needed).
 - `./gradlew :app:assembleRelease` for anything that will run on the TV; debug Compose is too slow on the target.
-- `./gradlew :app:testDebugUnitTest -Pscreenshots` renders Home and details at 1080p with a fake library (Robolectric + Roborazzi) into `app/build/screenshots/`. Use it to check layout changes from the cloud; it can't show focus animation or video.
+- `./gradlew :app:testDebugUnitTest -Pscreenshots` renders every page at 1080p into `app/build/screenshots/` (Robolectric + Roborazzi). `AppScreenshots` runs the whole app against `FakeJellyfin` (an OkHttp interceptor serving an invented library and generated art) and walks it with D-pad keys; `DesignScreenshots` renders Home and details from hand-built state. Use them to check layout from the cloud. They can't show video, animation timing or the player's picture.
+- Screenshot-test constraints: Robolectric's native graphics can't draw or decode off the main thread (so art is pre-rendered and Coil decodes on Main with `imageDecoderEnabled(false)`), and ExoPlayer never lets Compose go idle (background video is turned off, and the player is captured last with a hand-driven clock).
 - In cloud sessions the wrapper's distribution download can time out; a local Gradle 8.14.3 works the same. Maven Central often answers 429 there: pass an init script (`-I`) that adds `https://maven-central.storage-download.googleapis.com/maven2` to `pluginManagement` and `dependencyResolutionManagement` repositories in `beforeSettings`.
 
 ## Gotchas learned on the device

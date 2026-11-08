@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Root() {
+internal fun Root() {
     val session by FinmaxApp.instance.sessions.session.collectAsState()
     if (session == null) {
         LoginFlow()
@@ -66,8 +66,7 @@ private fun Root() {
 }
 
 @Composable
-private fun MainNavigation() {
-    val nav = remember { Navigator() }
+internal fun MainNavigation(nav: Navigator = remember { Navigator() }) {
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
     CompositionLocalProvider(LocalNav provides nav) {
         AnimatedContent(

@@ -14,7 +14,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Stores small secrets (access tokens, API keys) encrypted with an AES-GCM key that never
  * leaves the Android Keystore. Values are kept in a private SharedPreferences file.
  */
-class SecureStore(context: Context) {
+open class SecureStore(context: Context) {
     private val prefs = context.getSharedPreferences("finmax_secure", Context.MODE_PRIVATE)
 
     private val key: SecretKey by lazy {
@@ -31,7 +31,7 @@ class SecureStore(context: Context) {
             }.generateKey()
     }
 
-    fun put(name: String, value: String?) {
+    open fun put(name: String, value: String?) {
         if (value == null) {
             prefs.edit().remove(name).apply()
             return
@@ -41,7 +41,7 @@ class SecureStore(context: Context) {
         prefs.edit().putString(name, Base64.encodeToString(data, Base64.NO_WRAP)).apply()
     }
 
-    fun get(name: String): String? {
+    open fun get(name: String): String? {
         val raw = prefs.getString(name, null) ?: return null
         return runCatching {
             val data = Base64.decode(raw, Base64.NO_WRAP)

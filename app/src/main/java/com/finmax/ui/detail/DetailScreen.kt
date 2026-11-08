@@ -191,6 +191,12 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
     val scrolled by remember {
         androidx.compose.runtime.derivedStateOf { state.list.firstVisibleItemIndex > 0 || state.list.firstVisibleItemScrollOffset > 160 }
     }
+    // Sections below the header snap to the top when they take focus, so nothing sits half cut off.
+    fun Modifier.snapOnFocus(key: String) = onFocusChanged { f ->
+        if (f.hasFocus) scope.launch {
+            state.list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.let { state.list.animateScrollToItem(it.index) }
+        }
+    }
     val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.72f else 0f, androidx.compose.animation.core.tween(500), label = "dim")
 
     Box(Modifier.fillMaxSize().background(Fm.Bg)) {
@@ -244,7 +250,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (isSeries && state.seasons.isNotEmpty()) {
                 item(key = "seasons") {
-                    Column {
+                    Column(Modifier.snapOnFocus("seasons")) {
                         SectionTitle("Episodes", index = indexOf("Episodes"))
                         LazyRow(
                             contentPadding = PaddingValues(start = Fm.SafeH - 10.dp, end = Fm.SafeH, top = 10.dp),
@@ -273,7 +279,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (state.children.isNotEmpty()) {
                 item(key = "children") {
-                    Column {
+                    Column(Modifier.snapOnFocus("children")) {
                         SectionTitle("In this collection", index = indexOf("In this collection"))
                         MediaRow("", state.children, CardStyle.POSTER, "children", onOpen = { nav.open(it) }, showTitle = false)
                     }
@@ -281,7 +287,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (cast.isNotEmpty()) {
                 item(key = "cast") {
-                    Column {
+                    Column(Modifier.snapOnFocus("cast")) {
                         SectionTitle("Cast", index = indexOf("Cast"))
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
@@ -295,7 +301,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             }
             if (state.similar.isNotEmpty()) {
                 item(key = "similar") {
-                    Column {
+                    Column(Modifier.snapOnFocus("similar")) {
                         SectionTitle("More like this", index = indexOf("More like this"))
                         MediaRow("", state.similar, CardStyle.POSTER, "similar", onOpen = { nav.open(it) }, showTitle = false)
                     }
