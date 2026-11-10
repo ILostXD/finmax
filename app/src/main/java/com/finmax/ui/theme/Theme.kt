@@ -24,6 +24,8 @@ object Fm {
     // Brand
     val Noir = Color(0xFF000000)
     val Amethyst = Color(0xFF7E49B3)
+    /** Amethyst darkened: Seerr's series pill, so it reads apart from the movie pill (Amethyst). */
+    val AmethystDeep = Color(0xFF2B1342)
     val Mist = Color(0xFFCFCFCF)
 
     // Base and surfaces: pure black, with neutral greys for raised surfaces

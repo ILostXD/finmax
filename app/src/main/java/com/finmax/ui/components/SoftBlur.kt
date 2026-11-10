@@ -1,5 +1,7 @@
 package com.finmax.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember

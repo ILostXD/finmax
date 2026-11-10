@@ -1087,12 +1087,13 @@ private fun SlideInfo(item: BaseItemDto, repo: MediaRepository, right: Boolean) 
 
 /** Large expanded title for items without logo art; scales down for long names. */
 @Composable
-fun BigTitle(name: String, modifier: Modifier = Modifier, maxLines: Int = 2, textAlign: TextAlign? = null) {
-    val style = when {
+fun BigTitle(name: String, modifier: Modifier = Modifier, maxLines: Int = 2, textAlign: TextAlign? = null, scale: Float = 1f) {
+    val base = when {
         name.length <= 10 -> MaterialTheme.typography.displayLarge
         name.length <= 22 -> MaterialTheme.typography.displayMedium
         else -> MaterialTheme.typography.displaySmall
     }
+    val style = if (scale == 1f) base else base.copy(fontSize = base.fontSize * scale, lineHeight = base.lineHeight * scale)
     Text(name.uppercase(), style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis, textAlign = textAlign, modifier = modifier)
 }
 

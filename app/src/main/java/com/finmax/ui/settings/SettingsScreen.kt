@@ -79,6 +79,8 @@ import com.finmax.ui.components.holdUpStaysInside
 import com.finmax.ui.components.friendlyError
 import com.finmax.ui.login.FmTextField
 import com.finmax.ui.theme.Fm
+import com.finmax.ui.components.focusMemory
+import com.finmax.ui.components.popoverBlur
 import com.finmax.update.Updater
 import com.finmax.ui.player.shadow
 import kotlinx.coroutines.delay
@@ -123,7 +125,18 @@ fun SettingsScreen() {
     val linked = remember { SettingsLink.section != null }
     LaunchedEffect(Unit) { SettingsLink.section = null }
 
+    val pick = SettingsPicker.open
+    // Closing the picker hands focus back to the row that opened it (it would otherwise land on the top bar).
+    var returnTo by remember { mutableStateOf<FocusRequester?>(null) }
+    LaunchedEffect(pick) {
+        if (pick != null) returnTo = pick.back
+        else returnTo?.let { r ->
+            returnTo = null
+            repeat(10) { delay(40); if (runCatching { r.requestFocus() }.getOrDefault(false)) return@LaunchedEffect }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
+      Box(Modifier.fillMaxSize().popoverBlur(pick != null)) {
         BrandBackdrop()
         Column(Modifier.fillMaxSize()) {
             TopBar(Route.Settings)
@@ -150,6 +163,35 @@ fun SettingsScreen() {
                 }
             }
         }
+      }
+        pick?.let { p ->
+            androidx.activity.compose.BackHandler { SettingsPicker.open = null }
+            com.finmax.ui.library.SidePanel(p.title) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(p.options.size) { i ->
+                        com.finmax.ui.components.PopoverItem(
+                            p.options[i], { p.onPick(i); SettingsPicker.open = null }, primary = i == p.selected,
+                            modifier = Modifier.fillMaxWidth().focusMemory("pick/${p.title}/$i", initial = i == p.selected),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A setting's whole option list in a side panel, for lists too long to cycle through. */
+private class Pick(val title: String, val options: List<String>, val selected: Int, val back: FocusRequester, val onPick: (Int) -> Unit)
+
+private object SettingsPicker {
+    var open by mutableStateOf<Pick?>(null)
+}
+
+@Composable
+private fun <T> PickRow(title: String, desc: String?, options: List<T>, current: T, label: (T) -> String, modifier: Modifier = Modifier, onPick: (T) -> Unit) {
+    val back = remember { FocusRequester() }
+    ChoiceRow(title, desc, label(current), modifier.focusRequester(back)) {
+        SettingsPicker.open = Pick(title, options.map(label), options.indexOf(current), back) { onPick(options[it]) }
     }
 }
 
@@ -213,8 +255,8 @@ private fun Pane(s: Section, focusFirst: Boolean) {
             }
             Section.PLAYBACK -> {
                 item {
-                    ChoiceRow("Streaming quality", "Lower it if playback stalls on Wi-Fi", if (st.maxBitrateMbps == 0) "Automatic" else "${st.maxBitrateMbps} Mbps", f) {
-                        set { it.copy(maxBitrateMbps = listOf(0, 120, 80, 40, 20, 10, 4).after(it.maxBitrateMbps)) }
+                    PickRow("Streaming quality", "Lower it if playback stalls on Wi-Fi", listOf(0, 120, 80, 40, 20, 10, 4), st.maxBitrateMbps, { if (it == 0) "Automatic" else "$it Mbps" }, f) { v ->
+                        set { it.copy(maxBitrateMbps = v) }
                     }
                 }
                 item {
@@ -235,33 +277,33 @@ private fun Pane(s: Section, focusFirst: Boolean) {
                 }
                 item { ToggleRow("Play the next episode automatically", null, st.autoplayNext) { set { it.copy(autoplayNext = !it.autoplayNext) } } }
                 if (st.autoplayNext) item {
-                    ChoiceRow("Next episode countdown", null, "${st.autoplayCountdownSec} s") {
-                        set { it.copy(autoplayCountdownSec = listOf(5, 10, 15, 20, 30).after(it.autoplayCountdownSec)) }
+                    PickRow("Next episode countdown", null, listOf(5, 10, 15, 20, 30), st.autoplayCountdownSec, { "$it s" }) { v ->
+                        set { it.copy(autoplayCountdownSec = v) }
                     }
                 }
                 item { ChoiceRow("Intros & recaps", null, segLabel(st.skipIntro)) { set { it.copy(skipIntro = SegmentAction.entries.after(it.skipIntro)) } } }
                 item { ChoiceRow("End credits", null, segLabel(st.skipCredits)) { set { it.copy(skipCredits = SegmentAction.entries.after(it.skipCredits)) } } }
                 item {
-                    ChoiceRow("Rewind when resuming", "Starts a little before where you stopped", if (st.resumeRewindSec == 0) "Off" else "${st.resumeRewindSec} s") {
-                        set { it.copy(resumeRewindSec = listOf(0, 5, 10, 15, 30).after(it.resumeRewindSec)) }
+                    PickRow("Rewind when resuming", "Starts a little before where you stopped", listOf(0, 5, 10, 15, 30), st.resumeRewindSec, { if (it == 0) "Off" else "$it s" }) { v ->
+                        set { it.copy(resumeRewindSec = v) }
                     }
                 }
                 item {
-                    ChoiceRow("Preferred audio language", null, langLabel(st.preferredAudioLang)) {
-                        set { it.copy(preferredAudioLang = langs.after(it.preferredAudioLang)) }
+                    PickRow("Preferred audio language", null, langs, st.preferredAudioLang, ::langLabel) { v ->
+                        set { it.copy(preferredAudioLang = v) }
                     }
                 }
             }
             Section.SUBTITLES -> {
                 item { SubtitlePreview(st) }
                 item {
-                    ChoiceRow("Preferred language", null, langLabel(st.preferredSubtitleLang), f) {
-                        set { it.copy(preferredSubtitleLang = langs.after(it.preferredSubtitleLang)) }
+                    PickRow("Preferred language", null, langs, st.preferredSubtitleLang, ::langLabel, f) { v ->
+                        set { it.copy(preferredSubtitleLang = v) }
                     }
                 }
                 item {
-                    ChoiceRow("Text size", null, "${(st.subtitleScale * 100).toInt()}%") {
-                        set { it.copy(subtitleScale = listOf(0.75f, 0.9f, 1f, 1.15f, 1.3f, 1.5f).after(it.subtitleScale)) }
+                    PickRow("Text size", null, listOf(0.75f, 0.9f, 1f, 1.15f, 1.3f, 1.5f), st.subtitleScale, { "${(it * 100).toInt()}%" }) { v ->
+                        set { it.copy(subtitleScale = v) }
                     }
                 }
                 item { ToggleRow("Background box", null, st.subtitleBackground) { set { it.copy(subtitleBackground = !it.subtitleBackground) } } }
@@ -271,13 +313,13 @@ private fun Pane(s: Section, focusFirst: Boolean) {
                     }
                 }
                 item {
-                    ChoiceRow("Distance from bottom", null, "${st.subtitleBottomPct}%") {
-                        set { it.copy(subtitleBottomPct = listOf(4, 8, 12, 16, 20).after(it.subtitleBottomPct)) }
+                    PickRow("Distance from bottom", null, listOf(4, 8, 12, 16, 20), st.subtitleBottomPct, { "$it%" }) { v ->
+                        set { it.copy(subtitleBottomPct = v) }
                     }
                 }
                 item {
-                    ChoiceRow("Timing step", "How far each press moves subtitles when you fix their sync", "${st.subtitleDelayStepMs} ms") {
-                        set { it.copy(subtitleDelayStepMs = listOf(50, 100, 250, 500, 1000).after(it.subtitleDelayStepMs)) }
+                    PickRow("Timing step", "How far each press moves subtitles when you fix their sync", listOf(50, 100, 250, 500, 1000), st.subtitleDelayStepMs, { "$it ms" }) { v ->
+                        set { it.copy(subtitleDelayStepMs = v) }
                     }
                 }
             }
@@ -300,8 +342,8 @@ private fun Pane(s: Section, focusFirst: Boolean) {
             }
             Section.SCREENSAVER -> {
                 item {
-                    ChoiceRow("Start after", "Backdrops from your library, slowly drifting, with a clock", if (st.screensaverMin == 0) "Off" else "${st.screensaverMin} min", f) {
-                        set { it.copy(screensaverMin = listOf(0, 2, 5, 10, 15, 30).after(it.screensaverMin)) }
+                    PickRow("Start after", "Backdrops from your library, slowly drifting, with a clock", listOf(0, 2, 5, 10, 15, 30), st.screensaverMin, { if (it == 0) "Off" else "$it min" }, f) { v ->
+                        set { it.copy(screensaverMin = v) }
                     }
                 }
                 item { ActionRow("Show it now", "Any button brings you back", Ic.Play) { ScreensaverState.active = true } }

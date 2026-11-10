@@ -76,7 +76,7 @@ private val dateFormat = java.time.format.DateTimeFormatter.ofPattern("d MMMM yy
 
 /**
  * A person's page: photo, life dates and biography on the left; everything of theirs in the
- * library on the right, over the focused title's art melted into glass.
+ * library on the right, on the plain background.
  */
 @Composable
 fun PersonScreen(id: UUID) {
@@ -87,11 +87,6 @@ fun PersonScreen(id: UUID) {
     (state.person.value as? Load.Failed)?.let { ErrorPanel(it.message, { }); return }
 
     Box(Modifier.fillMaxSize().background(Fm.Bg)) {
-        val art = state.focused ?: state.titles.firstOrNull()
-        Crossfade(art?.id, animationSpec = tween(500), label = "art") { artId ->
-            val a = art?.takeIf { it.id == artId }
-            GlassBackdrop(a?.let { repo.backdrop(it, 1280) }, soft = a?.let { repo.backdrop(it, 320) }, live = true, frost = 1f, dim = 0.3f)
-        }
         Row(Modifier.fillMaxSize().padding(start = Fm.SafeH, top = Fm.SafeV)) {
             Column(Modifier.width(280.dp).fillMaxHeight().padding(bottom = Fm.SafeV)) {
                 Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {

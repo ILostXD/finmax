@@ -1,5 +1,6 @@
 package com.finmax.ui.discover
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,8 +95,8 @@ fun SeerrSearchScreen() {
     val seerr = FinmaxApp.instance.seerr
     val state = entryState("seerrSearch") { PagedGrid().apply { reset({ seerr.trending(it) }) } }
     val q = entryState("seerrQuery") { QueryHolder() }
-    Box(Modifier.fillMaxSize()) {
-        Backdrop(state.focused)
+    // Plain black: a backdrop changing behind the keyboard while typing was distracting.
+    Box(Modifier.fillMaxSize().background(Fm.Bg)) {
         Column(Modifier.fillMaxSize()) {
             TopBar(Route.Discover)
             Row(Modifier.fillMaxSize().padding(start = Fm.SafeH, top = 8.dp).holdUpStaysInside()) {
@@ -132,9 +133,10 @@ fun SeerrGenreScreen(genre: SeerrGenre) {
 
 @Composable
 private fun Backdrop(item: SeerrItem?) {
-    androidx.compose.animation.Crossfade(item?.key, animationSpec = androidx.compose.animation.core.tween(450), label = "bg") { k ->
+    androidx.compose.animation.Crossfade(item?.key, animationSpec = androidx.compose.animation.core.tween(300), label = "bg") { k ->
         val i = item?.takeIf { it.key == k }
-        GlassBackdrop(i?.backdropMedium, soft = i?.backdropSmall, dim = 0.35f)
+        // Plain black until something has art (the brand-gradient fallback flashed).
+        i?.backdropMedium?.let { GlassBackdrop(it, soft = i.backdropSmall, dim = 0.35f) }
     }
 }
 

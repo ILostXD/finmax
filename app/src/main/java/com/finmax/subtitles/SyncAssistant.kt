@@ -113,7 +113,11 @@ class SyncAssistant(
         val currentCues = pc.cues?.cues
 
         if (current == null || currentCues == null) {
-            steps += if (current == null) "No subtitle selected" else "Selected subtitle is image-based (${current.codec}) and can't be retimed"
+            steps += when {
+                current == null -> "No subtitle selected"
+                current.isTextSubtitle -> "The subtitle's text is still coming from the server (embedded tracks can take a few minutes). Try again shortly"
+                else -> "Selected subtitle is image-based (${current.codec}) and can't be retimed"
+            }
         } else {
             steps += "Subtitle: ${current.displayTitle ?: current.language} · ${current.codec}${if (current.isExternal) " · external file" else " · embedded"} · ${currentCues.size} lines"
 
@@ -234,7 +238,7 @@ class SyncAssistant(
             notes += m.notes
             r.downloadCount?.let { notes += "$it downloads" }
             r.providerName?.let { notes += "via $it" }
-            val score = (if (r.isHashMatch == true) 3.0 else 0.0) + m.value + log10((r.downloadCount ?: 0) + 1.0) / 10
+            val score = remoteScore(r.isHashMatch == true, m.value, r.downloadCount ?: 0)
             candidates += Candidate("r${r.id}", name, Origin.REMOTE, notes, score, remote = r)
         }
         if (remote.isSuccess && remote.getOrNull().isNullOrEmpty()) steps += "No results from server providers (needs a subtitle plugin such as OpenSubtitles)"
@@ -434,6 +438,10 @@ class SyncAssistant(
     fun resetPoints() = points.clear()
 
     companion object {
+        /** A server provider's result: a hash match (made for this exact file) outweighs any name match. */
+        fun remoteScore(hashMatch: Boolean, nameScore: Double, downloads: Int): Double =
+            (if (hashMatch) 3.0 else 0.0) + nameScore + log10(downloads + 1.0) / 10
+
         private val bCodes = mapOf(
             "ger" to "de", "fre" to "fr", "chi" to "zh", "dut" to "nl", "cze" to "cs", "gre" to "el", "per" to "fa",
             "rum" to "ro", "slo" to "sk", "alb" to "sq", "arm" to "hy", "baq" to "eu", "bur" to "my", "geo" to "ka",

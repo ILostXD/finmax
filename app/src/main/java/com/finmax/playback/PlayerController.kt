@@ -158,8 +158,25 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
     var timing by mutableStateOf(Timing()); private set
 
     /** When set, the renderer shows these instead (sync assistant preview); nothing is persisted. */
-    var previewCues by mutableStateOf<CueTrack?>(null)
-    var previewTiming by mutableStateOf<Timing?>(null)
+    private var previewCuesState by mutableStateOf<CueTrack?>(null)
+    private var previewTimingState by mutableStateOf<Timing?>(null)
+    var previewCues: CueTrack?
+        get() = previewCuesState
+        set(v) { previewCuesState = v; syncMpvSubs() }
+    var previewTiming: Timing?
+        get() = previewTimingState
+        set(v) { previewTimingState = v; syncMpvSubs() }
+
+    /** mpv draws the selected (embedded) subtitle itself; finmax keeps its text only for sync tools. */
+    val mpvDrawsSubtitle: Boolean
+        get() = isMpv && method == PlayMethod.DIRECT_PLAY && currentSubtitle?.isExternal == false
+
+    /** Mirrors the live or previewed timing onto mpv, and hides its subtitle while another one is previewed. */
+    private fun syncMpvSubs() {
+        val mpv = player as? MpvPlayer ?: return
+        mpv.subTiming = previewTimingState ?: timing
+        mpv.subVisible = previewCuesState == null
+    }
 
     private var playSessionId: String? = null
     private var request: PlayRequest? = null
@@ -459,10 +476,11 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
         cueJob?.cancel()
         cues = null
         timing = Timing()
+        syncMpvSubs()
         applyTrackOverrides(player.currentTracks)
         val sub = currentSubtitle ?: return
         if (!sub.isTextSubtitle) return
-        if (isMpv && !sub.isExternal && method == PlayMethod.DIRECT_PLAY) return // mpv draws it
+        // When mpv draws it, the text is still loaded: the sync assistant and "Sync to a line" need it.
         val itemId = item?.id ?: return
         val sourceId = source?.id ?: return
         cuesLoading = true
@@ -473,6 +491,7 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
                     applyTrackOverrides(player.currentTracks) // finmax takes over from the player
                     app.subtitles.rememberedTiming(itemId, sub.syncKey())?.let { t ->
                         timing = t
+                        syncMpvSubs()
                         notice = "Using your saved sync for this subtitle (${describe(t)})"
                     }
                 }
@@ -487,7 +506,7 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
     /** Sets the live correction and remembers it for this media + subtitle. */
     fun applyTiming(t: Timing) {
         timing = t
-        (player as? MpvPlayer)?.subDelayMs = t.offsetMs
+        syncMpvSubs()
         val sub = currentSubtitle ?: return
         item?.id?.let { app.subtitles.rememberTiming(it, sub.syncKey(), t) }
     }

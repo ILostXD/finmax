@@ -257,7 +257,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             false
         },
     ) {
-      Box(Modifier.fillMaxSize().popoverBlur(tracksOpen || playlistOpen, 440.dp)) {
+      Box(Modifier.fillMaxSize().popoverBlur(tracksOpen || playlistOpen, 380.dp)) {
         GlassBackdrop(
             repo.backdrop(item), soft = repo.backdrop(item, 320), dim = dim * (1f - leave.value), clear = leave.value,
             live = true, frost = frost * (1f - leave.value),
@@ -418,9 +418,10 @@ private fun TitleBlock(item: BaseItemDto, repo: MediaRepository, starring: List<
         if (logo != null) {
             AsyncImage(logo, item.name, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart, modifier = Modifier.height(104.dp).width(420.dp))
         } else {
-            BigTitle(item.name ?: "", maxLines = 2)
+            BigTitle(item.name ?: "", maxLines = 2, scale = 1.2f)
         }
-        Spacer(Modifier.height(14.dp))
+        // Capitals leave room under the text that a logo doesn't, so a text title sits closer.
+        Spacer(Modifier.height(if (logo != null) 14.dp else 4.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             RatingLine(item, ends = endsAt(item))
             techBadges(item).forEach { Badge(it) }
@@ -613,7 +614,7 @@ private fun TrackPicker(item: BaseItemDto, state: DetailState, onDone: () -> Uni
     val sources = item.mediaSources.orEmpty()
     val source = sources.firstOrNull { it.id == state.mediaSourceId } ?: sources.firstOrNull()
     val streams = source?.mediaStreams.orEmpty()
-    SidePanel("Audio & Subtitles", width = 440.dp) {
+    SidePanel("Audio & Subtitles", width = 380.dp, footer = { PillButton("Done", onDone) }) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (sources.size > 1) {
                 item { Label("Version") }
@@ -642,7 +643,6 @@ private fun TrackPicker(item: BaseItemDto, state: DetailState, onDone: () -> Uni
                     { state.subtitleIndex = s.index }, primary = selected, modifier = Modifier.fillMaxWidth(),
                 )
             }
-            item { Spacer(Modifier.height(8.dp)); PillButton("Done", onDone) }
         }
     }
 }
@@ -665,7 +665,7 @@ private fun PlaylistPicker(item: BaseItemDto, repo: MediaRepository, onDone: () 
         }
     }
     fun create() { if (name.isNotBlank()) run { repo.createPlaylist(name.trim(), item.id) } }
-    SidePanel("Add to playlist", width = 440.dp) {
+    SidePanel("Add to playlist", width = 380.dp) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(lists.orEmpty(), key = { it.id }) { p ->
                 com.finmax.ui.components.PopoverItem(
@@ -686,4 +686,4 @@ private fun PlaylistPicker(item: BaseItemDto, repo: MediaRepository, onDone: () 
 }
 
 @Composable
-private fun Label(text: String) = Overline(text, Modifier.padding(top = 12.dp, bottom = 2.dp))
+private fun Label(text: String) = Overline(text, Modifier.padding(start = 14.dp, top = 12.dp, bottom = 2.dp))

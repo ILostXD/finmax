@@ -535,7 +535,8 @@ private fun SubtitleOverlay(pc: PlayerController, liftForControls: Boolean) {
     LaunchedEffect(pc) {
         while (true) {
             withFrameMillis { }
-            val track = pc.previewCues ?: pc.cues
+            // mpv draws its own subtitle (with the same timing); finmax only draws a previewed alternative.
+            val track = pc.previewCues ?: pc.cues?.takeIf { !pc.mpvDrawsSubtitle }
             text = track?.textAt(pc.positionMs, pc.previewTiming ?: pc.timing)
         }
     }
@@ -926,7 +927,7 @@ private fun QueueRow(
 /** Every audio and subtitle track, picked without closing (Back closes). */
 @Composable
 private fun TracksPanel(pc: PlayerController) {
-    com.finmax.ui.library.SidePanel("Audio & subtitles", width = 460.dp) {
+    com.finmax.ui.library.SidePanel("Audio & subtitles", width = 390.dp) {
         androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item { Text("Audio", style = MaterialTheme.typography.titleMedium, color = Fm.Accent) }
             items(pc.audioStreams.size) { i ->
@@ -1069,7 +1070,7 @@ private val com.finmax.subtitles.Cue.oneLine get() = text.replace('\n', ' ')
 
 @Composable
 private fun SubtitlePanel(pc: PlayerController, step: Long, onAssistant: () -> Unit, onLines: () -> Unit, onClose: () -> Unit) {
-    com.finmax.ui.library.SidePanel("Subtitles", width = 460.dp) {
+    com.finmax.ui.library.SidePanel("Subtitles", width = 390.dp) {
         androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (pc.cues != null) {
                 item {
@@ -1210,7 +1211,7 @@ private fun LineSyncPanel(pc: PlayerController, a: SyncAssistant, onDone: () -> 
             delay(700)
         }
     }
-    com.finmax.ui.library.SidePanel("Sync to a line", width = 460.dp) {
+    com.finmax.ui.library.SidePanel("Sync to a line", width = 390.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "Press OK on a line the moment you hear it spoken. One line fixes a constant delay; a second line at least a minute later also fixes drift.",
@@ -1223,9 +1224,9 @@ private fun LineSyncPanel(pc: PlayerController, a: SyncAssistant, onDone: () -> 
                 PillButton(cue.oneLine.take(70), { a.markLine(cue) }, modifier = Modifier.fillMaxWidth().focusRequester(req))
             }
             Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("Done", onDone, primary = true)
+            Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton("Clear points", { a.resetPoints() })
+                PillButton("Done", onDone, primary = true)
             }
         }
     }

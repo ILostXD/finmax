@@ -81,15 +81,44 @@ fun SeerrTitleScreen(item: SeerrItem, requestNow: Boolean = false) {
     val scope = rememberCoroutineScope()
     var details by remember { mutableStateOf<SeerrDetails?>(null) }
     val similar = remember { mutableStateListOf<SeerrItem>() }
-    var asking by remember { mutableStateOf(requestNow) }
-    var done by remember { mutableStateOf<String?>(null) }
+    // Movies request on the press (Cancel request sits next to it); shows still pick their seasons first.
+    var asking by remember { mutableStateOf(requestNow && !item.isMovie) }
+    var requestId by remember { mutableStateOf<Int?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    suspend fun reload() {
+        // Fresh status (the list may predate a request made elsewhere) and the page's extra facts.
+        runCatching { seerr.details(item) }.onSuccess {
+            details = it
+            requestId = it.requestId
+            SeerrRequests.status[item.key] = it.status
+        }
+    }
+    fun act(block: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        error = null
+        scope.launch {
+            runCatching { block() }.onFailure { error = friendlyError(it) }
+            reload() // Seerr may have approved it on the spot, or reset it after a cancel
+            busy = false
+        }
+    }
+    fun requestMovie() = act {
+        requestId = seerr.request(item)
+        SeerrRequests.status[item.key] = 2
+    }
+    fun cancelRequest() = requestId?.let { id ->
+        act {
+            seerr.cancelRequest(id, details?.mediaId)
+            SeerrRequests.status[item.key] = 1
+            requestId = null
+        }
+    }
     LaunchedEffect(item.key) {
         launch {
-            // Fresh status (the list may predate a request made elsewhere) and the page's extra facts.
-            runCatching { seerr.details(item) }.onSuccess {
-                details = it
-                if (it.status > 1) SeerrRequests.status[item.key] = it.status
-            }
+            reload()
+            if (requestNow && item.isMovie && SeerrRequests.of(item) <= 1) requestMovie()
         }
         launch { runCatching { seerr.similar(item) }.onSuccess { similar += it.take(20) } }
     }
@@ -98,11 +127,15 @@ fun SeerrTitleScreen(item: SeerrItem, requestNow: Boolean = false) {
     val list = rememberLazyListState()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     fun Modifier.snap(index: Int) = onFocusChanged { if (it.hasFocus) scope.launch { list.animateScrollToItem(index) } }
+    // Scrolled past the header, the picture darkens and melts into the glass, as on a movie's page.
+    val scrolled by remember { androidx.compose.runtime.derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 160 } }
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.45f else 0f, androidx.compose.animation.core.tween(600), label = "dim")
+    val frost by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 1f else 0f, androidx.compose.animation.core.tween(600), label = "frost")
     val libraryId = (d?.jellyfinId ?: item.jellyfinId)?.let { runCatching { java.util.UUID.fromString(it.withDashes()) }.getOrNull() }
 
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().popoverBlur(asking, 460.dp)) {
-            GlassBackdrop(item.backdrop, soft = item.backdropSmall)
+        Box(Modifier.fillMaxSize().popoverBlur(asking, 390.dp)) {
+            GlassBackdrop(item.backdrop, soft = item.backdropSmall, dim = dim, live = true, frost = frost)
             CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
                 LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
                     item(key = "head") {
@@ -119,8 +152,8 @@ fun SeerrTitleScreen(item: SeerrItem, requestNow: Boolean = false) {
                             }
                             Spacer(Modifier.weight(1f))
                             Column(Modifier.width(640.dp)) {
-                                BigTitle(item.title, maxLines = 2)
-                                Spacer(Modifier.height(14.dp))
+                                BigTitle(item.title, maxLines = 2, scale = 1.2f)
+                                Spacer(Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     MetaLine(
                                         listOfNotNull(
@@ -161,41 +194,47 @@ fun SeerrTitleScreen(item: SeerrItem, requestNow: Boolean = false) {
                                         // A show that's only partly here can still ask for the missing seasons.
                                         if (status == 4 && !item.isMovie) GhostButton("Request more", { asking = true }, icon = Ic.Add)
                                     }
-                                    status <= 1 -> PillButton(if (item.isMovie) "Request" else "Request…", { asking = true }, icon = Ic.Add, primary = true, modifier = first)
                                     else -> {
-                                        PillButton(seerrStatusLabel(status) ?: "", {}, icon = if (status >= 4) Ic.CheckCircle else Ic.Clock, modifier = first)
+                                        // One button whose label follows the status, so requesting doesn't drop the focus.
+                                        val open = status <= 1
+                                        PillButton(
+                                            if (open) (if (item.isMovie) "Request" else "Request…") else seerrStatusLabel(status) ?: "",
+                                            { if (open) { if (item.isMovie) requestMovie() else asking = true } },
+                                            icon = if (open) Ic.Add else if (status >= 4) Ic.CheckCircle else Ic.Clock,
+                                            primary = open, modifier = first, // not disabled while busy: a disabled button would lose the focus
+                                        )
+                                        if (status in 2..3 && requestId != null) GhostButton("Cancel request", { cancelRequest() }, modifier = Modifier.focusMemory("cancel"))
                                         if (status == 4 && !item.isMovie) GhostButton("Request more", { asking = true }, icon = Ic.Add)
                                     }
                                 }
-                                val note = done ?: when (status) {
-                                    2 -> "Waiting for approval in Seerr."
-                                    3 -> "Approved and downloading. It appears in your library when it's done."
-                                    else -> null
-                                }
-                                note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim) }
+                                val note = error ?: "Waiting for approval in Seerr.".takeIf { status == 2 }
+                                note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = if (error != null) Fm.Error else Fm.TextDim) }
                             }
                         }
                     }
-                    if (!d?.cast.isNullOrEmpty()) item(key = "cast") {
-                        Column(Modifier.snap(1)) {
-                            SectionTitle("Cast")
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
-                                modifier = Modifier.focusRestorer(),
-                            ) { items(d!!.cast, key = { it.name + it.role }) { PersonCard(it) } }
-                        }
-                    }
-                    if (similar.isNotEmpty()) item(key = "similar") {
-                        Column(Modifier.snap(if (d?.cast.isNullOrEmpty()) 1 else 2)) {
-                            SectionTitle("More like this")
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
-                                modifier = Modifier.focusRestorer(),
-                            ) {
-                                items(similar, key = { it.key }) { s ->
-                                    SeerrCard(s, Modifier.width(128.dp).aspectRatio(2f / 3f).focusMemory("sim/${s.key}"), onFocus = {}) { nav.openSeerr(s) }
+                    // Cast and More like this share one screen, so moving between them never shifts the page.
+                    if (!d?.cast.isNullOrEmpty() || similar.isNotEmpty()) item(key = "more") {
+                        CompositionLocalProvider(LocalBringIntoViewSpec provides com.finmax.ui.components.rememberEdgeScroll()) {
+                            Column(Modifier.snap(1).padding(top = 6.dp)) {
+                                if (!d?.cast.isNullOrEmpty()) {
+                                    SectionTitle("Cast")
+                                    LazyRow(
+                                        contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
+                                        modifier = Modifier.focusRestorer(),
+                                    ) { items(d!!.cast, key = { "${it.id}/${it.role}" }) { p -> PersonCard(p) { nav.push(com.finmax.ui.Route.SeerrPerson(p)) } } }
+                                }
+                                if (similar.isNotEmpty()) {
+                                    SectionTitle("More like this")
+                                    LazyRow(
+                                        contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
+                                        modifier = Modifier.focusRestorer(),
+                                    ) {
+                                        items(similar, key = { it.key }) { s ->
+                                            SeerrCard(s, Modifier.width(116.dp).aspectRatio(2f / 3f).focusMemory("sim/${s.key}"), onFocus = {}) { nav.openSeerr(s) }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -205,19 +244,20 @@ fun SeerrTitleScreen(item: SeerrItem, requestNow: Boolean = false) {
         }
         if (asking) {
             BackHandler { asking = false }
-            RequestPanel(item, d, onCancel = { asking = false }) { message ->
+            RequestPanel(item, d, onCancel = { asking = false }) { id ->
                 asking = false
                 SeerrRequests.status[item.key] = 2
-                done = message
+                requestId = id
+                scope.launch { reload() }
             }
         }
     }
 }
 
 @Composable
-private fun PersonCard(p: SeerrPerson) {
-    Column(Modifier.width(108.dp)) {
-        FocusTile(onClick = {}, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+private fun PersonCard(p: SeerrPerson, onClick: () -> Unit) {
+    Column(Modifier.width(92.dp)) {
+        FocusTile(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
             p.photo?.let { AsyncImage(it, p.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 ?: Text(p.name.take(1), style = MaterialTheme.typography.displaySmall, color = Fm.TextFaint, modifier = Modifier.align(Alignment.Center))
         }
@@ -231,7 +271,7 @@ private fun PersonCard(p: SeerrPerson) {
  * in the library are shown, not offered), with All seasons on top.
  */
 @Composable
-private fun RequestPanel(item: SeerrItem, d: SeerrDetails?, onCancel: () -> Unit, onDone: (String) -> Unit) {
+private fun RequestPanel(item: SeerrItem, d: SeerrDetails?, onCancel: () -> Unit, onDone: (Int?) -> Unit) {
     val seerr = FinmaxApp.instance.seerr
     val scope = rememberCoroutineScope()
     var sending by remember { mutableStateOf(false) }
@@ -245,20 +285,12 @@ private fun RequestPanel(item: SeerrItem, d: SeerrDetails?, onCancel: () -> Unit
         scope.launch {
             val all = !item.isMovie && picked.size == open.size && open.size == d?.seasons?.size
             runCatching { seerr.request(item, if (item.isMovie || all) null else picked.sorted()) }
-                .onSuccess {
-                    onDone(
-                        when {
-                            item.isMovie -> "Requested. You'll find it in your library once it's downloaded."
-                            picked.size == 1 -> "Season ${picked.first()} requested."
-                            else -> "${picked.size} seasons requested."
-                        },
-                    )
-                }
+                .onSuccess { onDone(it) }
                 .onFailure { error = friendlyError(it) }
             sending = false
         }
     }
-    SidePanel(if (item.isMovie) "Request movie" else "Request seasons", width = 460.dp) {
+    SidePanel(if (item.isMovie) "Request movie" else "Request seasons", width = 390.dp) {
         androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {

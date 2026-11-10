@@ -564,6 +564,8 @@ fun GlassBackdrop(
     live: Boolean = false,
     /** 0..1: the sharp picture dissolves fully into the glass (the page scrolled past its header). */
     frost: Float = 0f,
+    /** Where the bottom glass starts and where it's fully glass, as fractions of the height. */
+    bottomFade: ClosedFloatingPointRange<Float> = 0.62f..1f,
 ) {
     Box(modifier.fillMaxSize().background(Fm.Bg)) {
         if (url == null) {
@@ -571,10 +573,10 @@ fun GlassBackdrop(
             return@Box
         }
         if (live) {
-            LiveGlass(url, textSide, dim, sharp, blur, reach, clear, frost)
+            LiveGlass(url, textSide, dim, sharp, blur, reach, clear, frost, bottomFade)
             return@Box
         }
-        StaticGlass(url, soft, textSide, dim, sharp, blur, reach, clear)
+        StaticGlass(url, soft, textSide, dim, sharp, blur, reach, clear, bottomFade)
     }
 }
 
@@ -586,7 +588,7 @@ fun GlassBackdrop(
 @Composable
 private fun StaticGlass(
     url: String, soft: String?, textSide: Alignment.Horizontal, dim: Float, sharp: @Composable BoxScope.() -> Unit,
-    blur: Dp, reach: Float, clear: Float,
+    blur: Dp, reach: Float, clear: Float, bottomFade: ClosedFloatingPointRange<Float>,
 ) {
     Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         // 1. Blurred copy fills the screen: the "glass" the text sits on.
@@ -612,7 +614,7 @@ private fun StaticGlass(
                 .drawWithContent {
                     drawContent()
                     drawRect(fade, blendMode = BlendMode.DstIn)
-                    drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to glass), blendMode = BlendMode.DstIn)
+                    drawRect(Brush.verticalGradient(bottomFade.start to Color.Black, bottomFade.endInclusive to glass), blendMode = BlendMode.DstIn)
                 },
         ) {
             AsyncImage(url, null, contentScale = ContentScale.Crop, alignment = Alignment.Center, modifier = Modifier.fillMaxSize())
@@ -630,7 +632,7 @@ private const val GlassDownscale = 8f
 @Composable
 private fun LiveGlass(
     url: String, textSide: Alignment.Horizontal, dim: Float, sharp: @Composable BoxScope.() -> Unit,
-    blur: Dp, reach: Float, clear: Float, frost: Float,
+    blur: Dp, reach: Float, clear: Float, frost: Float, bottomFade: ClosedFloatingPointRange<Float>,
 ) {
     // Glass copies, each recorded at 1/8 size: across the screen, at the bottom edge, and unmasked for frost.
     val acrossLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
@@ -677,9 +679,9 @@ private fun LiveGlass(
             val across = if (right) Brush.horizontalGradient((0.38f - reach) to Color.Black, (0.78f - reach) to Color.Transparent, startX = 0f, endX = w)
                 else Brush.horizontalGradient((0.3f + reach) to Color.Transparent, (0.7f + reach) to Color.Black, startX = 0f, endX = w)
             coat(acrossLayer, across, glass)
-            // The bottom fade only reaches the lower 38%: draw that coat there alone.
-            clipRect(top = full.height * 0.6f) {
-                coat(bottomLayer, Brush.verticalGradient(0.62f to Color.Black, 1f to Color.Transparent, startY = 0f, endY = full.height), glass)
+            // The bottom fade only reaches the lower part: draw that coat there alone.
+            clipRect(top = full.height * (bottomFade.start - 0.02f)) {
+                coat(bottomLayer, Brush.verticalGradient(bottomFade.start to Color.Black, bottomFade.endInclusive to Color.Transparent, startY = 0f, endY = full.height), glass)
             }
             // Frost melts the sharp picture away: plain glass over everything.
             coat(frostLayer, null, glass * frost)

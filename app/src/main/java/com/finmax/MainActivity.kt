@@ -121,6 +121,7 @@ internal fun MainNavigation(nav: Navigator = remember { Navigator() }) {
                     is Route.Person -> com.finmax.ui.detail.PersonScreen(r.id)
                     is Route.SeerrTitle -> com.finmax.ui.discover.SeerrTitleScreen(r.item, r.requestNow)
                     Route.SeerrSearch -> com.finmax.ui.discover.SeerrSearchScreen()
+                    is Route.SeerrPerson -> com.finmax.ui.discover.SeerrPersonScreen(r.person)
                     is Route.SeerrGenre -> com.finmax.ui.discover.SeerrGenreScreen(r.genre)
                     is Route.Player -> PlayerScreen(r)
                 }

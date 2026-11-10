@@ -12,8 +12,8 @@ android {
         applicationId = "com.finmax"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         // GitHub repo whose latest release is the app update (see update/Updater.kt).
         // TV boxes are ARM; the emulator ABIs would double the APK (mpv and FFmpeg are native).
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }

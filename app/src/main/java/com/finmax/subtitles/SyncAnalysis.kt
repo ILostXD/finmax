@@ -171,8 +171,9 @@ object ReleaseMatcher {
         val res = Regex("(\\d{3,4})p")
         val mRes = m.firstOrNull { res.matches(it) }
         if (mRes != null && mRes in s) notes += "Same resolution"
-        // The release group is usually the last token of a scene name.
-        val group = m.lastOrNull()?.takeIf { it !in noise && it !in sourceTokens && !res.matches(it) }
+        // The release group is usually the last token of a scene name, before the file extension
+        // (taking the extension itself meant real file names never matched a group).
+        val group = m.lastOrNull { it !in noise && it !in sourceTokens && !res.matches(it) }
         val groupMatch = group != null && group in s
         if (groupMatch) notes += "Same release group ($group)"
         val useful = (m - noise)

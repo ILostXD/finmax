@@ -145,6 +145,8 @@ private class DiscoverState : ScreenState() {
     var inRows by mutableStateOf(false)
     var focusedRow by mutableIntStateOf(0)
     var focused by mutableStateOf<SeerrItem?>(null)
+    /** A genre tile has focus: its art fills the background and its name heads the rows. */
+    var focusedGenre by mutableStateOf<SeerrGenre?>(null)
     var loading by mutableStateOf(true)
     var error by mutableStateOf<String?>(null)
     val list = LazyListState()
@@ -182,7 +184,7 @@ private class DiscoverState : ScreenState() {
             }
             launch {
                 val reqs = runCatching { seerr.requests() }.getOrDefault(emptyList())
-                put(DiscoverRow("requests", "Your requests", 0).apply { items += reqs })
+                put(DiscoverRow("requests", "Your requests", 99).apply { items += reqs })
             }
             poster("pmovies", "Popular movies", 3) { seerr.popularMovies(it) }
             poster("umovies", "Coming soon to cinemas", 4) { seerr.upcomingMovies(it) }
@@ -285,9 +287,15 @@ fun DiscoverScreen() {
                 )
             }
         } else {
-            Crossfade(state.focused?.key, animationSpec = tween(450), label = "rowsArt") { k ->
+            val genre = state.focusedGenre
+            val artKey = genre?.let { "genre/${it.mediaType}/${it.id}" } ?: state.focused?.key
+            Crossfade(artKey, animationSpec = tween(300), label = "rowsArt") { k ->
                 val item = state.focused?.takeIf { it.key == k }
-                GlassBackdrop(item?.backdropMedium, soft = item?.backdropSmall, dim = 0.25f)
+                val genreArt = genre?.takeIf { "genre/${it.mediaType}/${it.id}" == k }?.backdrop
+                // Glass under the info on the left and under the rows, the art left sharp only top right.
+                // Nothing to show yet: plain black like Home (GlassBackdrop's fallback is the brand gradient, which flashed).
+                val art = genreArt ?: item?.backdropMedium
+                if (art != null) GlassBackdrop(art, soft = genreArt ?: item?.backdropSmall, dim = 0.2f, blur = 64.dp, reach = 0.12f, bottomFade = 0.36f..0.56f)
             }
         }
 
@@ -313,7 +321,7 @@ fun DiscoverScreen() {
         }
 
         // ---- What the focused card is, above the rows ----
-        if (browsing) RowsHeader(state.focused, Modifier.padding(start = Fm.SafeH, top = 70.dp).graphicsLayer { alpha = rowsIn })
+        if (browsing) RowsHeader(state.focused, state.focusedGenre, Modifier.padding(start = Fm.SafeH, top = 70.dp).graphicsLayer { alpha = rowsIn })
 
         // ---- Rows ----
         CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
@@ -346,7 +354,8 @@ fun DiscoverScreen() {
                     val lit by animateFloatAsState(if (active) 1f else 0.32f, tween(240), label = "lit")
                     Column(Modifier.graphicsLayer { alpha = lit }) {
                         SectionTitle(row.title)
-                        DiscoverRowContent(row, nav) { item ->
+                        DiscoverRowContent(row, nav) { item, genre ->
+                            state.focusedGenre = genre
                             if (item != null) state.focused = item
                             if (state.focusedRow != i || state.list.firstVisibleItemIndex != i) {
                                 state.focusedRow = i
@@ -360,10 +369,14 @@ fun DiscoverScreen() {
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DiscoverRowContent(row: DiscoverRow, nav: Navigator, onFocused: (SeerrItem?) -> Unit) {
+private fun DiscoverRowContent(row: DiscoverRow, nav: Navigator, onFocused: (SeerrItem?, SeerrGenre?) -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val loader = remember { SingletonImageLoader.get(context) }
+    // The list above turns automatic scrolling off; this row still has to follow focus sideways.
+    CompositionLocalProvider(LocalBringIntoViewSpec provides com.finmax.ui.components.rememberEdgeScroll()) {
     LazyRow(
         state = row.list,
         contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
@@ -372,7 +385,7 @@ private fun DiscoverRowContent(row: DiscoverRow, nav: Navigator, onFocused: (See
     ) {
         if (row.genres.isNotEmpty()) {
             itemsIndexed(row.genres, key = { _, g -> g.id }) { i, g ->
-                GenreTile(g.name, g.backdrop, i, onClick = { nav.push(Route.SeerrGenre(g)) }, onFocused = { onFocused(null) },
+                GenreTile(g.name, g.backdrop, i, onClick = { nav.push(Route.SeerrGenre(g)) }, onFocused = { onFocused(null, g) },
                     modifier = Modifier.focusMemory("${row.key}/${g.id}"))
             }
         } else {
@@ -381,12 +394,17 @@ private fun DiscoverRowContent(row: DiscoverRow, nav: Navigator, onFocused: (See
                     item,
                     Modifier.width(128.dp).aspectRatio(2f / 3f).focusMemory("${row.key}/${item.key}"),
                     onFocus = {
-                        onFocused(item)
+                        onFocused(item, null)
+                        // Fetch the neighbours' art now, so the background is ready when focus gets there.
+                        for (j in i - 1..i + 3) row.items.getOrNull(j)?.let { n ->
+                            listOfNotNull(n.backdropMedium, n.backdropSmall).forEach { loader.enqueue(ImageRequest.Builder(context).data(it).build()) }
+                        }
                         if (i >= row.items.size - 6) scope.launch { row.more() }
                     },
                 ) { nav.openSeerr(item) }
             }
         }
+    }
     }
 }
 
@@ -442,8 +460,15 @@ private fun HeroInfo(item: SeerrItem, right: Boolean) {
 }
 
 @Composable
-private fun RowsHeader(focused: SeerrItem?, modifier: Modifier) = com.finmax.ui.components.FocusSwap(focused, modifier, key = { it?.key }) { item ->
+private fun RowsHeader(focused: SeerrItem?, genre: SeerrGenre?, modifier: Modifier) =
+    com.finmax.ui.components.FocusSwap(genre ?: focused, modifier, key = { (it as? SeerrGenre)?.let { g -> "genre/${g.mediaType}/${g.id}" } ?: (it as? SeerrItem)?.key }) { shown ->
     Column(Modifier.width(640.dp).height(150.dp), verticalArrangement = Arrangement.Bottom) {
+        if (shown is SeerrGenre) {
+            BigTitle(shown.name, maxLines = 1)
+            Text(if (shown.mediaType == "movie") "Movies" else "Shows", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim, modifier = Modifier.padding(top = 6.dp))
+            return@Column
+        }
+        val item = shown as? SeerrItem
         if (item == null) {
             BigTitle("Discover", maxLines = 1)
             Text("Pick a genre, or anything that catches your eye.", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim)
@@ -458,13 +483,27 @@ private fun RowsHeader(focused: SeerrItem?, modifier: Modifier) = com.finmax.ui.
     }
 }
 
-/** Poster card; a round badge in the corner says it's requested (clock) or in the library (check). */
+/**
+ * Poster card from Seerr. A pill top left says Movie or Series (and marks the card as Seerr's, as
+ * in Jellyseerr); a round badge top right says it's requested (clock) or in the library (check).
+ */
 @Composable
 internal fun SeerrCard(item: SeerrItem, modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit) {
     FocusTile(onClick = onClick, onFocused = onFocus, modifier = modifier) {
         item.poster?.let { AsyncImage(it, item.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
             ?: Text(item.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center).padding(8.dp))
+        TypePill(item.isMovie, Modifier.align(Alignment.TopStart).padding(7.dp))
         StatusBadge(SeerrRequests.of(item), Modifier.align(Alignment.TopEnd).padding(6.dp))
+    }
+}
+
+@Composable
+private fun TypePill(movie: Boolean, modifier: Modifier) {
+    Box(modifier.background((if (movie) Fm.Amethyst else Fm.AmethystDeep).copy(alpha = 0.9f), CircleShape).padding(horizontal = 7.dp, vertical = 2.dp)) {
+        Text(
+            if (movie) "MOVIE" else "SERIES", color = androidx.compose.ui.graphics.Color.White,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp), letterSpacing = androidx.compose.ui.unit.TextUnit(0.6f, androidx.compose.ui.unit.TextUnitType.Sp)),
+        )
     }
 }
 

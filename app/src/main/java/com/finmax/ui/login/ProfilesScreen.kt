@@ -71,7 +71,7 @@ fun ProfilesScreen() {
     val manyServers = sessions.servers.size > 1
 
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().popoverBlur(editing != null || serversOpen, 440.dp)) {
+        Box(Modifier.fillMaxSize().popoverBlur(editing != null || serversOpen, 380.dp)) {
             com.finmax.ui.components.BrandBackdrop()
             com.finmax.ui.components.Wordmark(
                 20.dp, Modifier.padding(start = Fm.SafeH, top = com.finmax.ui.components.TopBarTop + 10.dp),
@@ -112,7 +112,7 @@ fun ProfilesScreen() {
         editing?.let { u ->
             androidx.activity.compose.BackHandler { editing = null }
             val locked = remember(version) { sessions.hasPin(u) }
-            SidePanel(u.name, width = 420.dp) {
+            SidePanel(u.name, width = 370.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val first = remember { androidx.compose.ui.focus.FocusRequester() }
                     LaunchedEffect(Unit) { kotlinx.coroutines.delay(60); runCatching { first.requestFocus() } }
@@ -137,7 +137,7 @@ fun ProfilesScreen() {
 
         if (serversOpen) {
             androidx.activity.compose.BackHandler { serversOpen = false }
-            SidePanel("Servers", width = 460.dp) {
+            SidePanel("Servers", width = 390.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     sessions.servers.forEach { s ->
                         key(s.id + version) {
@@ -178,7 +178,8 @@ private fun avatarUrl(sessions: com.finmax.data.SessionManager, u: SavedUser): S
     return u.imageTag?.let { "${server.url.trimEnd('/')}/Users/${u.userId}/Images/Primary?tag=$it&maxWidth=300" }
 }
 
-private val TileShape = RoundedCornerShape(20.dp)
+/** Round, like the profile picture in the top bar. */
+private val TileShape = CircleShape
 
 /** Avatar square (photo, or initial on an amethyst gradient), name below; focus rings and lifts it. */
 @Composable

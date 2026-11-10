@@ -53,7 +53,10 @@ class SeerrPage(val items: List<SeerrItem>, val hasMore: Boolean)
 /** A genre tile from Seerr's genre slider: TMDB genre id, name and a backdrop to show on it. */
 data class SeerrGenre(val id: Int, val name: String, val backdrop: String?, val mediaType: String)
 
-data class SeerrPerson(val name: String, val role: String?, val photo: String?)
+data class SeerrPerson(val id: Int, val name: String, val role: String?, val photo: String?)
+
+/** A person's page facts from TMDB, through Seerr. Dates are ISO (yyyy-mm-dd). */
+data class SeerrPersonInfo(val name: String, val birthday: String?, val deathday: String?, val place: String?, val biography: String?, val photo: String?)
 
 data class SeerrSeason(val number: Int, val name: String, val episodes: Int, val status: Int)
 
@@ -68,6 +71,10 @@ data class SeerrDetails(
     val status: Int,
     val jellyfinId: String?,
     val certification: String?,
+    /** The newest request for this title, which Cancel request withdraws. */
+    val requestId: Int? = null,
+    /** Seerr's own id for the title (mediaInfo.id), needed to remove it from Radarr/Sonarr. */
+    val mediaId: Int? = null,
 )
 
 /**
@@ -114,6 +121,26 @@ class SeerrClient(private val http: OkHttpClient, private val settings: Settings
     suspend fun genre(g: SeerrGenre, p: Int = 1) =
         page(if (g.mediaType == "movie") "discover/movies/genre/${g.id}" else "discover/tv/genre/${g.id}", p)
     suspend fun search(query: String, p: Int = 1) = page("search", p, "query" to query)
+    suspend fun person(personId: Int): SeerrPersonInfo {
+        val o = JSONObject(get("person/$personId"))
+        fun str(k: String) = o.optString(k).takeIf { it.isNotBlank() && it != "null" }
+        return SeerrPersonInfo(
+            o.optString("name"), str("birthday"), str("deathday"), str("placeOfBirth"), str("biography"),
+            str("profilePath")?.takeIf { it.startsWith("/") }?.let { "${TMDB_IMG}h632$it" },
+        )
+    }
+
+    /** Everything [personId] acted in, most popular first (Seerr returns it all at once). */
+    suspend fun credits(personId: Int): List<SeerrItem> {
+        val arr = JSONObject(get("person/$personId/combined_credits")).optJSONArray("cast") ?: JSONArray()
+        return (0 until arr.length()).map { arr.getJSONObject(it) }
+            // Real roles first: talk-show guest spots ("Self", "Herself") are popular but say little about an actor.
+            .sortedWith(
+                compareBy<JSONObject> { Regex("^(self|herself|himself)\\b", RegexOption.IGNORE_CASE).containsMatchIn(it.optString("character")) }
+                    .thenByDescending { it.optDouble("popularity").takeIf { p -> !p.isNaN() } ?: 0.0 },
+            )
+            .mapNotNull { parse(it) }.distinctBy { it.key }
+    }
     suspend fun similar(item: SeerrItem) = page("${item.mediaType}/${item.tmdbId}/recommendations", 1).items
 
     suspend fun genres(mediaType: String): List<SeerrGenre> {
@@ -153,7 +180,7 @@ class SeerrClient(private val http: OkHttpClient, private val settings: Settings
             runtimeMin = o.optInt("runtime").takeIf { it > 0 } ?: o.optJSONArray("episodeRunTime")?.optInt(0)?.takeIf { it > 0 },
             genres = list(o.optJSONArray("genres")).map { it.optString("name") }.filter { it.isNotBlank() }.take(3),
             cast = list(credits?.optJSONArray("cast")).take(16).map {
-                SeerrPerson(it.optString("name"), it.optString("character").takeIf { c -> c.isNotBlank() },
+                SeerrPerson(it.optInt("id"), it.optString("name"), it.optString("character").takeIf { c -> c.isNotBlank() },
                     it.optString("profilePath").takeIf { p -> p.startsWith("/") }?.let { p -> "${TMDB_IMG}w185$p" })
             },
             director = list(credits?.optJSONArray("crew")).firstOrNull { it.optString("job") == "Director" }?.optString("name"),
@@ -163,14 +190,32 @@ class SeerrClient(private val http: OkHttpClient, private val settings: Settings
             status = info?.optInt("status", 1) ?: 1,
             jellyfinId = info?.optString("jellyfinMediaId")?.takeIf { it.isNotBlank() && it != "null" },
             certification = cert?.takeIf { it.isNotBlank() },
+            mediaId = info?.optInt("id")?.takeIf { it > 0 },
+            requestId = list(info?.optJSONArray("requests")).maxByOrNull { it.optInt("id") }?.optInt("id")?.takeIf { it > 0 },
         )
     }
 
-    /** Requests a movie, or a show's [seasons] (null = all). Seerr decides whether approval is needed. */
-    suspend fun request(item: SeerrItem, seasons: List<Int>? = null) {
+    /** Requests a movie, or a show's [seasons] (null = all), and returns the request's id. Seerr decides whether approval is needed. */
+    suspend fun request(item: SeerrItem, seasons: List<Int>? = null): Int? {
         val body = JSONObject().put("mediaType", item.mediaType).put("mediaId", item.tmdbId)
         if (!item.isMovie) body.put("seasons", seasons?.let { JSONArray(it) } ?: "all")
-        call(Request.Builder().url(url("request").build()).post(body.toString().toRequestBody("application/json".toMediaType())))
+        val r = call(Request.Builder().url(url("request").build()).post(body.toString().toRequestBody("application/json".toMediaType())))
+        return runCatching { JSONObject(r).optInt("id") }.getOrNull()?.takeIf { it > 0 }
+    }
+
+    /**
+     * Takes a request back completely, like Seerr's own "Remove from Radarr/Sonarr" and "Clear data":
+     * the title (and anything downloaded) leaves Radarr/Sonarr, then Seerr forgets the title and its
+     * requests. Without a media id only the request is withdrawn.
+     */
+    suspend fun cancelRequest(requestId: Int, mediaId: Int?) {
+        if (mediaId == null) {
+            call(Request.Builder().url(url("request/$requestId").build()).delete())
+            return
+        }
+        // Fails when Radarr/Sonarr never got the title (a request still waiting for approval): nothing to remove there.
+        runCatching { call(Request.Builder().url(url("media/$mediaId/file").build()).delete()) }
+        call(Request.Builder().url(url("media/$mediaId").build()).delete())
     }
 
     private fun parse(o: JSONObject): SeerrItem? {

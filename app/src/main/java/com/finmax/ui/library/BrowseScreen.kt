@@ -212,5 +212,5 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
 
 /** Right-hand picker; see [com.finmax.ui.components.Popover] for the look. */
 @Composable
-fun SidePanel(title: String, width: androidx.compose.ui.unit.Dp = 360.dp, content: @Composable () -> Unit) =
-    com.finmax.ui.components.Popover(title, width, content)
+fun SidePanel(title: String, width: androidx.compose.ui.unit.Dp = 340.dp, footer: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) =
+    com.finmax.ui.components.Popover(title, width, footer, content)

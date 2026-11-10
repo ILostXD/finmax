@@ -60,8 +60,17 @@ class MpvPlayer(context: Context, authHeader: String) : SimpleBasePlayer(Looper.
     private var newFrame = false
 
     /** Subtitle delay, from finmax's timing controls (mpv draws these subtitles itself). */
-    var subDelayMs: Long = 0
-        set(v) { field = v; mpv.setPropertyDouble("sub-delay", v / 1000.0) }
+    /** Retimes the subtitles mpv draws: shown at t × scale + offset, like finmax's own renderer. */
+    var subTiming = com.finmax.subtitles.Timing()
+        set(v) {
+            field = v
+            mpv.setPropertyDouble("sub-speed", v.scale)
+            mpv.setPropertyDouble("sub-delay", v.offsetMs / 1000.0)
+        }
+
+    /** Hides mpv's subtitles while finmax previews another subtitle over the picture. */
+    var subVisible = true
+        set(v) { field = v; mpv.setPropertyBoolean("sub-visibility", v) }
 
     init {
         mpv.setOptionString("vo", "gpu")

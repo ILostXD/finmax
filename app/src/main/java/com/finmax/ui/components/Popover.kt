@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -44,7 +45,10 @@ import com.finmax.ui.theme.Fm
 import kotlinx.coroutines.delay
 
 /** Extra width over which the blur and tint fade in, to the left of a popover's content. */
-private val FadeWidth = 160.dp
+private val FadeWidth = 120.dp
+
+/** How long a popover takes to slide and fade in, blur included. */
+private const val EnterMs = 320
 
 /**
  * Blurs this content progressively toward the right edge while a [Popover] of [width] is open:
@@ -52,17 +56,20 @@ private val FadeWidth = 160.dp
  * (Android 12+; older versions just get the tint from [Popover].)
  */
 @Composable
-fun Modifier.popoverBlur(active: Boolean, width: Dp = 360.dp): Modifier {
+fun Modifier.popoverBlur(active: Boolean, width: Dp = 340.dp): Modifier {
     if (!active || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
     val content = rememberGraphicsLayer()
     val blurred = rememberGraphicsLayer()
     val masked = rememberGraphicsLayer()
     val reach = with(LocalDensity.current) { (width + FadeWidth).toPx() }
     val fade = with(LocalDensity.current) { FadeWidth.toPx() }
+    val shown = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, androidx.compose.animation.core.tween(EnterMs, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
     return drawWithContent {
+        val p = shown.value
         content.record { this@drawWithContent.drawContent() }
         drawLayer(content)
-        blurred.renderEffect = BlurEffect(40f, 40f, TileMode.Clamp)
+        blurred.renderEffect = BlurEffect(40f * p + 0.1f, 40f * p + 0.1f, TileMode.Clamp)
         blurred.record { drawLayer(content) }
         masked.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
         masked.record {
@@ -73,6 +80,7 @@ fun Modifier.popoverBlur(active: Boolean, width: Dp = 360.dp): Modifier {
                 blendMode = BlendMode.DstIn,
             )
         }
+        masked.alpha = p
         drawLayer(masked)
     }
 }
@@ -83,8 +91,10 @@ fun Modifier.popoverBlur(active: Boolean, width: Dp = 360.dp): Modifier {
  * menu when it opens, unless something inside already took it.
  */
 @Composable
-fun Popover(title: String, width: Dp = 360.dp, content: @Composable () -> Unit) {
+fun Popover(title: String, width: Dp = 340.dp, footer: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     val req = remember { FocusRequester() }
+    val shown = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, androidx.compose.animation.core.tween(EnterMs, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
     var hasFocus by remember { mutableStateOf(false) }
     val back = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     LaunchedEffect(Unit) {
@@ -98,17 +108,18 @@ fun Popover(title: String, width: Dp = 360.dp, content: @Composable () -> Unit) 
         val startFraction = ((maxWidth - width - FadeWidth) / maxWidth).coerceIn(0f, 1f)
         val endFraction = ((maxWidth - width) / maxWidth).coerceIn(0f, 1f)
         Box(
-            Modifier.fillMaxSize().background(
+            Modifier.fillMaxSize().graphicsLayer { alpha = shown.value }.background(
                 Brush.horizontalGradient(
                     0f to Color.Transparent,
                     startFraction to Color.Transparent,
-                    endFraction to Fm.Bg.copy(alpha = 0.72f),
-                    1f to Fm.Bg.copy(alpha = 0.86f),
+                    endFraction to Fm.Bg.copy(alpha = 0.9f),
+                    1f to Fm.Bg.copy(alpha = 0.95f),
                 ),
             ),
         )
         Column(
             Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(width)
+                .graphicsLayer { alpha = shown.value; translationX = (1f - shown.value) * 48.dp.toPx() }
                 .padding(start = 8.dp, end = Fm.SafeH - 8.dp, top = Fm.SafeV, bottom = Fm.SafeV)
                 .focusRequester(req)
                 .onFocusChanged { hasFocus = it.hasFocus }
@@ -123,8 +134,13 @@ fun Popover(title: String, width: Dp = 360.dp, content: @Composable () -> Unit) 
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup(),
         ) {
-            Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 12.dp, bottom = 18.dp))
-            content()
+            // Lined up with the rows' icons (their pill padding), so the menu reads as one column.
+            Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 14.dp, bottom = 18.dp))
+            if (footer == null) content()
+            else {
+                Box(Modifier.weight(1f)) { content() }
+                Box(Modifier.align(Alignment.End).padding(top = 16.dp)) { footer() }
+            }
         }
     }
 }

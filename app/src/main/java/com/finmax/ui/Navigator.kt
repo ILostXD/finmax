@@ -24,6 +24,7 @@ sealed interface Route {
     /** A Discover title not (fully) in the library: its page, with the request button. */
     data class SeerrTitle(val item: com.finmax.data.SeerrItem, val requestNow: Boolean = false) : Route
     data object SeerrSearch : Route
+    data class SeerrPerson(val person: com.finmax.data.SeerrPerson) : Route
     data class SeerrGenre(val genre: com.finmax.data.SeerrGenre) : Route
     data class Player(
         val itemId: UUID,
