@@ -305,7 +305,9 @@ private val HomeCardShape = RoundedCornerShape(8.dp)
 private const val MOVE_MS = 240
 /** How long a card must hold focus before its video starts. */
 private const val VIDEO_DWELL_MS = 1_500L
-private const val VIDEO_ARM_MS = 300L
+// Creating the preview's player blocks the main thread for 100-450 ms on the Chromecast: arm it only
+// after the row glide (460 ms) and card resize have finished, or the glide stalls and then jumps.
+private const val VIDEO_ARM_MS = 700L
 
 /**
  * The one card preview on Home. It lives in a layer over the whole page (not inside the card), so
@@ -356,9 +358,14 @@ internal fun <T> rowMove(held: Boolean) = tween<T>(if (held) 300 else 460, easin
  */
 internal suspend fun LazyListState.glideTo(index: Int, held: Boolean) {
     fun offsetOf() = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.offset?.toFloat()
-    if (offsetOf() == null && index == firstVisibleItemIndex - 1) scroll { scrollBy(-1f) }
+    if (offsetOf() == null && index == firstVisibleItemIndex - 1) {
+        // A 1 px scroll can be applied without a new layout pass, so the row above only joins the
+        // visible items on the next frame. Checking before that made every other Up jump instead of glide.
+        scroll { scrollBy(-1f) }
+        androidx.compose.runtime.withFrameNanos { }
+    }
     if (offsetOf() == null) {
-        scrollToItem(index)
+        animateScrollToItem(index)
         return
     }
     var done = 0f
@@ -622,8 +629,9 @@ internal fun HomeContent(state: HomeState, repo: MediaRepository, heroRight: Boo
                             shape = RoundedCornerShape((8f * (1f - preview.grow.value)).dp)
                             clip = true
                         }
-                        // The video covers the inner half of the card's focus ring: redraw it on top, gone once full screen.
-                        .border(2.dp * (1f - preview.grow.value), Fm.Focus, RoundedCornerShape((8f * (1f - preview.grow.value)).dp)),
+                        // The video covers the inner half of the card's 2 dp focus ring: redraw only that half (1 dp), or
+                        // the ring visibly thickens the moment the preview layer appears. Gone once full screen.
+                        .border(1.dp * (1f - preview.grow.value), Fm.Focus, RoundedCornerShape((8f * (1f - preview.grow.value)).dp)),
                 ) {
                     AmbientVideo(
                         item, playing = true, settleMs = 0, reveal = preview.reveal,
@@ -1024,7 +1032,7 @@ internal fun GenreTile(name: String, art: String?, index: Int, onClick: () -> Un
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {
-        if (art != null) AsyncImage(art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(3.dp))
+        if (art != null) com.finmax.ui.components.BlurredImage(art, 3.dp, Modifier.fillMaxSize(), across = 156.dp)
         Box(
             Modifier.fillMaxSize().drawBehind {
                 drawRect(Fm.Bg.copy(alpha = 0.3f))

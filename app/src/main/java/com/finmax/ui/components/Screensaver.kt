@@ -128,7 +128,7 @@ private fun Frost(url: String?, drift: Modifier, at: (androidx.compose.ui.geomet
                 )
             },
     ) {
-        AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = drift.blur(28.dp))
+        BlurredImage(url, 28.dp, drift)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
     }
 }

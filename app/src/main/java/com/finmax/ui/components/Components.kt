@@ -1,5 +1,6 @@
 package com.finmax.ui.components
 
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -534,8 +536,23 @@ fun GlassBackdrop(
             LiveGlass(url, textSide, dim, sharp, blur, reach, clear, frost)
             return@Box
         }
+        StaticGlass(url, soft, textSide, dim, sharp, blur, reach, clear)
+    }
+}
+
+/**
+ * The still-art glass, kept as one offscreen layer: its ~10 full-screen passes (art, blur, tints,
+ * masks) are drawn once and then reused as a single texture while anything else on the page
+ * animates. Redrawing them every frame held the Chromecast's GPU at ~100 ms a frame.
+ */
+@Composable
+private fun StaticGlass(
+    url: String, soft: String?, textSide: Alignment.Horizontal, dim: Float, sharp: @Composable BoxScope.() -> Unit,
+    blur: Dp, reach: Float, clear: Float,
+) {
+    Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         // 1. Blurred copy fills the screen: the "glass" the text sits on.
-        AsyncImage(soft ?: url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(blur))
+        BlurredImage(soft ?: url, blur, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.42f)))
         // Deeper tint where the text sits, so light artwork still reads (still glass, not black).
         val shade = if (textSide == Alignment.End) {
@@ -569,41 +586,66 @@ fun GlassBackdrop(
     }
 }
 
+private const val GlassDownscale = 8f
+
 /** [GlassBackdrop] with live glass: art and video are recorded once and drawn blurred, then sharp and masked. */
 @Composable
 private fun LiveGlass(
     url: String, textSide: Alignment.Horizontal, dim: Float, sharp: @Composable BoxScope.() -> Unit,
     blur: Dp, reach: Float, clear: Float, frost: Float,
 ) {
-    val glassLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    val sharpLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    // Glass copies, each recorded at 1/8 size: across the screen, at the bottom edge, and unmasked for frost.
+    val acrossLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val bottomLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val frostLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val blurPx = with(androidx.compose.ui.platform.LocalDensity.current) { blur.toPx() }
     val right = textSide == Alignment.End
     Box(
         Modifier.fillMaxSize().drawWithContent {
-            // 1. The glass: everything below (still or video), blurred, tinted deeper under the text.
-            glassLayer.renderEffect = androidx.compose.ui.graphics.BlurEffect(blurPx, blurPx, androidx.compose.ui.graphics.TileMode.Clamp)
-            glassLayer.alpha = 1f - clear
-            glassLayer.record { this@drawWithContent.drawContent() }
-            drawLayer(glassLayer)
-            drawRect(Fm.Bg.copy(alpha = 0.42f * (1f - clear)))
-            drawRect(
-                if (right) Brush.horizontalGradient((0.45f - reach) to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f * (1f - clear)))
-                else Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f * (1f - clear)), (0.6f + reach) to Color.Transparent),
-            )
-            // 2. The same picture sharp, dissolving into the glass toward the text (and away entirely with frost).
-            val glass = Color.Black.copy(alpha = clear)
-            val fade = if (right) Brush.horizontalGradient((0.38f - reach) to Color.Black, (0.78f - reach) to glass)
-                else Brush.horizontalGradient((0.3f + reach) to glass, (0.7f + reach) to Color.Black)
-            sharpLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
-            sharpLayer.alpha = 1f - frost
-            sharpLayer.record {
-                this@drawWithContent.drawContent()
-                drawRect(fade, blendMode = BlendMode.DstIn)
-                drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to glass), blendMode = BlendMode.DstIn)
+            // The Chromecast's GPU manages only a few full-screen passes per video frame (nine took
+            // ~110 ms a frame). So: the picture is drawn sharp once, and the blurred, tinted glass goes
+            // on top as small layers scaled up, their fade toward the art baked in at 1/8 size.
+            // Glass over sharp with alpha (1 - m) equals sharp masked by m over glass. The sharp mask m
+            // is the product of a horizontal and a bottom fade; two glass coats with alpha (1 - mh) and
+            // (1 - mv) give 1 - mh * mv, the same picture.
+            this@drawWithContent.drawContent()
+            val full = size
+            val k = GlassDownscale
+            val small = androidx.compose.ui.unit.IntSize((full.width / k).roundToInt().coerceAtLeast(1), (full.height / k).roundToInt().coerceAtLeast(1))
+            val effect = androidx.compose.ui.graphics.BlurEffect(blurPx / k, blurPx / k, androidx.compose.ui.graphics.TileMode.Clamp)
+            // Gradients get explicit full-screen ends: inside the small layer, relative ones would
+            // stretch over the layer's 1/8 size instead of the screen.
+            val w = full.width
+            val shade = if (right) Brush.horizontalGradient((0.45f - reach) to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f), startX = 0f, endX = w)
+                else Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f), (0.6f + reach) to Color.Transparent, startX = 0f, endX = w)
+            fun coat(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, sharpMask: Brush?, alpha: Float) {
+                if (alpha <= 0f) return
+                layer.renderEffect = effect
+                // Its own buffer, or the DstOut cut below would cut into the screen behind it.
+                layer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                layer.alpha = alpha
+                layer.record(size = small) {
+                    scale(1f / k, 1f / k, pivot = Offset.Zero) {
+                        this@drawWithContent.drawContent()
+                        drawRect(Fm.Bg.copy(alpha = 0.42f), size = full)
+                        drawRect(shade, size = full)
+                        // Cut the glass away where the sharp picture shows.
+                        if (sharpMask != null) drawRect(sharpMask, size = full, blendMode = BlendMode.DstOut)
+                    }
+                }
+                scale(k, k, pivot = Offset.Zero) { drawLayer(layer) }
             }
-            if (frost < 1f) drawLayer(sharpLayer)
-            drawRect(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.35f * (1f - clear)), 0.2f to Color.Transparent))
+            val glass = 1f - clear
+            val across = if (right) Brush.horizontalGradient((0.38f - reach) to Color.Black, (0.78f - reach) to Color.Transparent, startX = 0f, endX = w)
+                else Brush.horizontalGradient((0.3f + reach) to Color.Transparent, (0.7f + reach) to Color.Black, startX = 0f, endX = w)
+            coat(acrossLayer, across, glass)
+            // The bottom fade only reaches the lower 38%: draw that coat there alone.
+            clipRect(top = full.height * 0.6f) {
+                coat(bottomLayer, Brush.verticalGradient(0.62f to Color.Black, 1f to Color.Transparent, startY = 0f, endY = full.height), glass)
+            }
+            // Frost melts the sharp picture away: plain glass over everything.
+            coat(frostLayer, null, glass * frost)
+            drawRect(Brush.verticalGradient(listOf(Fm.Bg.copy(alpha = 0.35f * glass), Color.Transparent), endY = full.height * 0.2f), size = full.copy(height = full.height * 0.2f))
             if (dim > 0f) drawRect(Fm.Bg.copy(alpha = dim))
         },
     ) {
@@ -628,13 +670,13 @@ fun GlassPanelBackground(soft: String?, fromRight: Dp, modifier: Modifier = Modi
             clipRect(left = size.width - fromRight.toPx()) { this@drawWithContent.drawContent() }
         },
     ) {
-        AsyncImage(soft, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(42.dp))
+        BlurredImage(soft, 42.dp, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.55f)))
     }
 }
 
 /**
- * The brand field from the palette card: Nox Noir with a Royal Amethyst glow rising from the
+ * The brand field: black with a Royal Amethyst glow rising from the
  * bottom right. Used where there is no artwork (sign-in, profiles, empty states).
  */
 @Composable

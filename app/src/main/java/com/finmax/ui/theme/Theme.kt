@@ -16,18 +16,18 @@ import com.finmax.R
 
 /**
  * finmax palette, from the brand card:
- * - Nox Noir `#141414`: the base everything sits on.
+ * - Black `#000000`: the base everything sits on.
  * - Royal Amethyst `#7E49B3`: the brand colour (primary actions, progress, focus glow).
  * - Steel Mist `#CFCFCF`: cool light grey for secondary text and the focus fill's family.
  */
 object Fm {
     // Brand
-    val Noir = Color(0xFF141414)
+    val Noir = Color(0xFF000000)
     val Amethyst = Color(0xFF7E49B3)
     val Mist = Color(0xFFCFCFCF)
 
-    // Base and surfaces: neutral near-blacks around Nox Noir
-    val Bg = Color(0xFF0E0E0F)
+    // Base and surfaces: pure black, with neutral greys for raised surfaces
+    val Bg = Color(0xFF000000)
     val Surface = Color(0xFF1A1A1C)
     val SurfaceHigh = Color(0xFF242427)
     val Outline = Color(0xFF3A3A3F)
