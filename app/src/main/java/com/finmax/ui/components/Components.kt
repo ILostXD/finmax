@@ -6,6 +6,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -183,6 +187,8 @@ fun PillButton(
             focusedContentColor = Fm.OnFocus,
             disabledContainerColor = Color.White.copy(alpha = 0.04f),
             disabledContentColor = Fm.TextFaint,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {
@@ -191,7 +197,7 @@ fun PillButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (icon != null) Icon(icon, null, Modifier.size(18.dp))
+            if (icon != null) MorphIcon(icon, null, Modifier.size(18.dp))
             Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
@@ -219,6 +225,8 @@ fun GhostButton(
             contentColor = Fm.Text,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {
@@ -227,7 +235,7 @@ fun GhostButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (icon != null) Icon(icon, null, Modifier.size(18.dp))
+            if (icon != null) MorphIcon(icon, null, Modifier.size(18.dp))
             Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
             if (arrow) {
                 Box(Modifier.padding(start = 4.dp).width(22.dp).height(1.dp).background(LocalContentColor.current))
@@ -251,12 +259,42 @@ fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
             contentColor = if (active) Fm.Accent else Fm.Text,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.15f),
     ) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(size * 0.5f))
+            MorphIcon(icon, label, Modifier.size(size * 0.5f), key = active)
         }
+    }
+}
+
+/**
+ * An icon that morphs when it changes (+ into a check, or the same icon switching on): the old one
+ * turns and shrinks away while the new one turns and grows in. [key] also triggers it, for buttons
+ * whose icon stays the same and only switches state.
+ */
+@Composable
+fun MorphIcon(icon: ImageVector, contentDescription: String?, modifier: Modifier = Modifier, key: Any? = null) {
+    androidx.compose.animation.AnimatedContent(
+        targetState = icon to key,
+        transitionSpec = {
+            (fadeIn(tween(200, 60)) + androidx.compose.animation.scaleIn(tween(320, 60, FastOutSlowInEasing), initialScale = 0.3f)) togetherWith
+                (fadeOut(tween(160)) + androidx.compose.animation.scaleOut(tween(220, easing = FastOutSlowInEasing), targetScale = 0.3f)) using
+                androidx.compose.animation.SizeTransform(clip = false)
+        },
+        contentAlignment = Alignment.Center,
+        label = "morph",
+    ) { (ic, _) ->
+        val turn by transition.animateFloat({ tween(320, easing = FastOutSlowInEasing) }, label = "turn") {
+            when (it) {
+                androidx.compose.animation.EnterExitState.PreEnter -> -90f
+                androidx.compose.animation.EnterExitState.Visible -> 0f
+                androidx.compose.animation.EnterExitState.PostExit -> 90f
+            }
+        }
+        Icon(ic, contentDescription, modifier.graphicsLayer { rotationZ = turn })
     }
 }
 
@@ -277,7 +315,7 @@ fun FocusTile(
         onLongClick = onLongClick,
         modifier = modifier.onFocusChanged { if (it.isFocused) onFocused?.invoke() },
         shape = ClickableSurfaceDefaults.shape(shape),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh, pressedContainerColor = Fm.SurfaceHigh),
         scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Fm.Focus), shape = shape)),
         glow = if (glow) ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.6f), 16.dp)) else ClickableSurfaceDefaults.glow(),
@@ -687,4 +725,27 @@ fun BrandBackdrop(modifier: Modifier = Modifier) {
             drawRect(Brush.radialGradient(listOf(Fm.Mist.copy(alpha = 0.10f), Color.Transparent), center = Offset(size.width * 0.05f, size.height * 0.0f), radius = size.width * 0.45f))
         },
     )
+}
+
+/**
+ * Text that follows focus (the facts under a row, a grid's title line): the new content fades in
+ * smoothly as the old fades out, instead of popping. Size is never animated: on the
+ * Chromecast that would re-lay out everything below on every frame.
+ */
+/** Ease-in-out for fades, so the change is spread over the whole duration. */
+val FadeEasing = androidx.compose.animation.core.CubicBezierEasing(0.4f, 0f, 0.6f, 1f)
+
+@Composable
+fun <T> FocusSwap(target: T, modifier: Modifier = Modifier, key: (T) -> Any? = { it }, content: @Composable (T) -> Unit) {
+    androidx.compose.animation.AnimatedContent(
+        target, modifier, contentKey = key,
+        transitionSpec = {
+            // Out first, then in, both eased evenly: a front-loaded curve finished in ~130 ms and read as a pop,
+            // and a short fade-out vanished inside the frames the Chromecast drops right after a key press.
+            fadeIn(tween(450, 220, FadeEasing)) togetherWith
+                fadeOut(tween(300, easing = FadeEasing)) using androidx.compose.animation.SizeTransform(clip = false) { _, _ -> androidx.compose.animation.core.snap() }
+        },
+        contentAlignment = Alignment.TopStart,
+        label = "focusSwap",
+    ) { content(it) }
 }

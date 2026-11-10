@@ -442,8 +442,8 @@ private fun HeroInfo(item: SeerrItem, right: Boolean) {
 }
 
 @Composable
-private fun RowsHeader(item: SeerrItem?, modifier: Modifier) {
-    Column(modifier.width(640.dp).height(150.dp), verticalArrangement = Arrangement.Bottom) {
+private fun RowsHeader(focused: SeerrItem?, modifier: Modifier) = com.finmax.ui.components.FocusSwap(focused, modifier, key = { it?.key }) { item ->
+    Column(Modifier.width(640.dp).height(150.dp), verticalArrangement = Arrangement.Bottom) {
         if (item == null) {
             BigTitle("Discover", maxLines = 1)
             Text("Pick a genre, or anything that catches your eye.", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim)

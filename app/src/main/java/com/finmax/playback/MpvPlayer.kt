@@ -81,10 +81,10 @@ class MpvPlayer(context: Context, authHeader: String) : SimpleBasePlayer(Looper.
         mpv.setOptionString("demuxer-max-bytes", "64MiB")
         mpv.setOptionString("demuxer-max-back-bytes", "16MiB")
         mpv.setOptionString("http-header-fields-append", "Authorization: $authHeader")
-        // libass has no system font lookup on Android: a fallback font for subtitles without embedded ones.
-        fallbackFontDir(context)?.let {
+        // libass has no system font lookup on Android: the app's face for subtitles without embedded fonts.
+        SubtitleFont.dir(context)?.let {
             mpv.setOptionString("sub-fonts-dir", it.absolutePath)
-            mpv.setOptionString("sub-font", "Roboto")
+            mpv.setOptionString("sub-font", SubtitleFont.FAMILY)
         }
         mpv.init()
 
@@ -352,18 +352,4 @@ class MpvPlayer(context: Context, authHeader: String) : SimpleBasePlayer(Looper.
     }
 
     private fun done(): ListenableFuture<*> = Futures.immediateVoidFuture()
-
-    companion object {
-        /** Copies a system sans-serif into app storage once; libass loads fonts from a folder. */
-        fun fallbackFontDir(context: Context): File? = runCatching {
-            val dir = File(context.filesDir, "mpv-fonts").apply { mkdirs() }
-            val dest = File(dir, "Roboto-Regular.ttf")
-            if (!dest.exists()) {
-                val src = listOf("/system/fonts/RobotoStatic-Regular.ttf", "/system/fonts/Roboto-Regular.ttf", "/system/fonts/NotoSans-Regular.ttf", "/system/fonts/DroidSans.ttf")
-                    .map(::File).first { it.exists() }
-                src.copyTo(dest)
-            }
-            dir
-        }.getOrNull()
-    }
 }

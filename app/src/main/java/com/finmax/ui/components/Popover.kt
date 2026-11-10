@@ -154,6 +154,8 @@ fun PopoverItem(
             focusedContentColor = Fm.OnFocus,
             disabledContainerColor = Color.Transparent,
             disabledContentColor = Fm.TextFaint,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {

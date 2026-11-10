@@ -152,8 +152,8 @@ private fun Grid(state: PagedGrid, title: String, modifier: Modifier, big: Boole
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(Modifier.padding(bottom = 4.dp)) {
                 if (big) BigTitle(title, maxLines = 1) else Text(title, style = MaterialTheme.typography.titleLarge)
-                state.focused?.let { f ->
-                    Text(listOfNotNull(f.title, f.year).joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim, maxLines = 1)
+                com.finmax.ui.components.FocusSwap(state.focused, key = { it?.key }) { f ->
+                    Text(f?.let { listOfNotNull(it.title, it.year).joinToString("  ·  ") } ?: "", style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim, maxLines = 1)
                 }
             }
         }

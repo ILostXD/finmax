@@ -168,6 +168,8 @@ private fun NavItem(s: Section, selected: Boolean, req: FocusRequester, initial:
             containerColor = if (selected) Color.White.copy(alpha = 0.07f) else Color.Transparent,
             contentColor = if (selected) Fm.Text else Fm.TextDim,
             focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
     ) {
@@ -344,6 +346,8 @@ private fun SettingRow(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent, contentColor = Fm.Text,
             focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.015f),
     ) {

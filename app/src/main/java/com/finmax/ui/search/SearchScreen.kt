@@ -173,6 +173,8 @@ private fun Key(modifier: Modifier, label: String, icon: androidx.compose.ui.gra
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Fm.Surface, contentColor = Fm.TextDim,
             focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {

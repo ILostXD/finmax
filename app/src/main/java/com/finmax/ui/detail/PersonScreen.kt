@@ -139,11 +139,13 @@ fun PersonScreen(id: UUID) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(bottom = 2.dp)) {
                         Overline(if (state.titles.isEmpty()) "In your library" else "In your library · ${state.titles.size}")
-                        Text(
-                            state.focused?.let { f -> listOfNotNull(f.name, f.productionYear?.toString()).joinToString("  ·  ") } ?: "Movies & shows",
-                            style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp).fillMaxWidth(),
-                        )
+                        com.finmax.ui.components.FocusSwap(state.focused, key = { it?.id }) { focused ->
+                            Text(
+                                focused?.let { f -> listOfNotNull(f.name, f.productionYear?.toString()).joinToString("  ·  ") } ?: "Movies & shows",
+                                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp).fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 itemsIndexed(state.titles, key = { _, t -> t.id }) { i, t ->

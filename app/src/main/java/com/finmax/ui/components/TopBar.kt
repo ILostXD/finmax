@@ -100,6 +100,8 @@ private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
             contentColor = if (selected) Fm.Text else Fm.TextDim,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         modifier = Modifier.padding(horizontal = 2.dp),
@@ -135,7 +137,7 @@ private fun Avatar(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(CircleShape),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.SurfaceHigh),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.SurfaceHigh, pressedContainerColor = Fm.SurfaceHigh),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = Modifier.onFocusChanged { focused = it.isFocused },
     ) {

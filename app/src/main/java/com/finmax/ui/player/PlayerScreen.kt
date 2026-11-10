@@ -391,7 +391,7 @@ fun PlayerScreen(route: Route.Player) {
                             android.graphics.Color.WHITE, android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
                             if (settings.subtitleShadow == com.finmax.data.SubShadow.NONE) androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
                             else androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                            android.graphics.Color.BLACK, null,
+                            android.graphics.Color.BLACK, com.finmax.playback.SubtitleFont.typeface(it),
                         ),
                     )
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -546,6 +546,7 @@ private fun SubtitleOverlay(pc: PlayerController, liftForControls: Boolean) {
             textAlign = TextAlign.Center,
             style = TextStyle(
                 color = Color.White,
+                fontFamily = com.finmax.ui.theme.BodyFont, // the app's face, like the Settings preview
                 fontSize = (26 * s.subtitleScale).sp,
                 fontWeight = FontWeight.Medium,
                 lineHeight = (33 * s.subtitleScale).sp,
@@ -893,6 +894,8 @@ private fun QueueRow(
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Fm.Text,
             focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {

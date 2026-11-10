@@ -822,12 +822,19 @@ private fun HomeRow(
 @Composable
 private fun RowInfo(section: HomeSection, focusedIndex: androidx.compose.runtime.IntState, rowFocused: androidx.compose.runtime.State<Boolean>) {
     val info = section.items.getOrNull(focusedIndex.intValue)
-    // Opens at full height in one step and only fades: animating its height would re-lay out every
-    // row below on each frame, which this hardware can't do in time.
-    if (rowFocused.value && info != null) {
-        AnimatedContent(info, contentKey = { it.id }, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(90)) }, label = "info") { item ->
-            CardInfo(item, section.kind)
-        }
+    // Keeps the last card while focus is between cards (the index is briefly unset then): hiding
+    // the block for that moment skipped the old text's fade-out.
+    val shown = androidx.compose.runtime.remember { mutableStateOf(info) }
+    if (info != null) shown.value = info
+    // Opens at full height in one step and only fades in: animating its height would re-lay
+    // out every row below on each frame, which this hardware can't do in time.
+    androidx.compose.animation.AnimatedVisibility(
+        rowFocused.value && shown.value != null,
+        enter = fadeIn(tween(450, 60, com.finmax.ui.components.FadeEasing)),
+        exit = androidx.compose.animation.ExitTransition.None,
+        label = "rowInfo",
+    ) {
+        shown.value?.let { com.finmax.ui.components.FocusSwap(it, key = { i -> i.id }) { item -> CardInfo(item, section.kind) } }
     }
 }
 
@@ -910,7 +917,7 @@ private fun HomeCard(
                 if (it.isFocused) onFocused()
             },
         shape = ClickableSurfaceDefaults.shape(HomeCardShape),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.Surface),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.Surface, pressedContainerColor = Fm.Surface),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Fm.Focus), shape = HomeCardShape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
@@ -1025,6 +1032,8 @@ internal fun GenreTile(name: String, art: String?, index: Int, onClick: () -> Un
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Fm.SurfaceHigh, contentColor = Fm.Text,
             focusedContainerColor = Fm.SurfaceHigh, focusedContentColor = Fm.Text,
+            pressedContainerColor = Fm.SurfaceHigh,
+            pressedContentColor = Fm.Text,
         ),
         border = ClickableSurfaceDefaults.border(
             border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), shape = HomeCardShape),
@@ -1089,7 +1098,8 @@ fun BigTitle(name: String, modifier: Modifier = Modifier, maxLines: Int = 2, tex
 
 /** ★★★½☆ 7.4  │  2h 35m  │  PG-13 */
 @Composable
-fun RatingLine(item: BaseItemDto, modifier: Modifier = Modifier) {
+/** [ends]: "ends 20:12", shown after the runtime, joined by a dot. */
+fun RatingLine(item: BaseItemDto, modifier: Modifier = Modifier, ends: String? = null) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val parts = mutableListOf<@Composable () -> Unit>()
         item.communityRating?.let { r ->
@@ -1110,7 +1120,17 @@ fun RatingLine(item: BaseItemDto, modifier: Modifier = Modifier) {
         }
         val runtime = item.runTimeTicks?.takeIf { it >= 600_000_000 }?.let { formatRuntime(it / 10_000) }
             ?: item.childCount?.takeIf { item.type == BaseItemKind.SERIES }?.let { "$it Season${if (it == 1) "" else "s"}" }
-        runtime?.let { parts += { Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.Text) } }
+        runtime?.let {
+            parts += {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.Text)
+                    if (ends != null) {
+                        Box(Modifier.size(3.dp).background(Fm.TextFaint, CircleShape))
+                        Text(ends, style = MaterialTheme.typography.labelMedium, color = Fm.TextDim)
+                    }
+                }
+            }
+        }
         item.officialRating?.let { parts += { com.finmax.ui.components.Badge(it) } }
         parts.forEachIndexed { i, p ->
             if (i > 0) Hairline(Modifier.height(12.dp), vertical = true, alpha = 0.4f)

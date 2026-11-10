@@ -192,7 +192,7 @@ private fun ProfileTile(
             onClick = onClick,
             modifier = modifier.size(150.dp).onFocusChanged { focused = it.isFocused },
             shape = ClickableSurfaceDefaults.shape(TileShape),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.Surface),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.Surface, pressedContainerColor = Fm.Surface),
             border = ClickableSurfaceDefaults.border(
                 focusedBorder = androidx.tv.material3.Border(BorderStroke(3.dp, Fm.Focus), shape = TileShape),
             ),
@@ -237,7 +237,7 @@ private fun AddTile(onClick: () -> Unit) {
             onClick = onClick,
             modifier = Modifier.size(150.dp).onFocusChanged { focused = it.isFocused },
             shape = ClickableSurfaceDefaults.shape(TileShape),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.06f), focusedContainerColor = Fm.Focus),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.06f), focusedContainerColor = Fm.Focus, pressedContainerColor = Fm.Focus),
             border = ClickableSurfaceDefaults.border(
                 border = androidx.tv.material3.Border(BorderStroke(1.5.dp, Color.White.copy(alpha = 0.18f)), shape = TileShape),
             ),

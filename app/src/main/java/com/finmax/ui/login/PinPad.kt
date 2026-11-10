@@ -127,6 +127,8 @@ private fun PadKey(modifier: Modifier = Modifier, onClick: () -> Unit, content: 
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Fm.Surface, contentColor = Fm.Text, focusedContainerColor = Fm.Focus, focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
     ) {

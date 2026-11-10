@@ -422,8 +422,7 @@ private fun TitleBlock(item: BaseItemDto, repo: MediaRepository, starring: List<
         }
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            RatingLine(item)
-            endsAt(item)?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Fm.TextDim) }
+            RatingLine(item, ends = endsAt(item))
             techBadges(item).forEach { Badge(it) }
         }
         item.taglines?.firstOrNull()?.let {
@@ -554,6 +553,8 @@ private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit, mod
             contentColor = if (selected) Fm.Text else Fm.TextDim,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
+            pressedContainerColor = Fm.Focus,
+            pressedContentColor = Fm.OnFocus,
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
     ) {

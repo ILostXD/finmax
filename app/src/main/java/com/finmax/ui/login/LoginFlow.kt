@@ -408,7 +408,7 @@ fun FmTextField(
                 onClick = { editing = true },
                 modifier = Modifier.fillMaxWidth().focusRequester(boxReq).onFocusChanged { focused = it.isFocused },
                 shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape),
-                colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
+                colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh, pressedContainerColor = Fm.SurfaceHigh),
                 border = androidx.tv.material3.ClickableSurfaceDefaults.border(
                     border = androidx.tv.material3.Border(BorderStroke(2.dp, Fm.Outline), shape = shape),
                     focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Fm.Accent), shape = shape),
