@@ -1,8 +1,144 @@
-# FINMAX
+<div align="center">
 
-A native Android TV client for Jellyfin: cinematic browsing, reliable ExoPlayer playback, and a subtitle experience built around fixing out-of-sync subtitles.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/finmax_logo_white.png">
+  <img src="assets/finmax_logo_black.png" alt="finmax" width="420">
+</picture>
 
-## Build and install
+### A cinematic Jellyfin client for Android TV.
+
+Frosted glass, living backgrounds, and a player that fixes your subtitles.
+
+[![Latest release](https://img.shields.io/github/v/release/ILostXD/finmax?style=for-the-badge&color=7E49B3&label=release)](https://github.com/ILostXD/finmax/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ILostXD/finmax/total?style=for-the-badge&color=141414)](https://github.com/ILostXD/finmax/releases)
+[![License](https://img.shields.io/github/license/ILostXD/finmax?style=for-the-badge&color=CFCFCF&labelColor=141414)](LICENSE)
+
+![Android TV](https://img.shields.io/badge/Android%20TV-8.0%2B-141414?style=flat-square&logo=androidtv)
+![Jellyfin](https://img.shields.io/badge/Jellyfin-10.10%2B-7E49B3?style=flat-square&logo=jellyfin&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-Compose%20for%20TV-141414?style=flat-square&logo=kotlin)
+
+[**Download**](https://github.com/ILostXD/finmax/releases/latest) · [Install](#-install) · [Features](#-features) · [Build](#-build-from-source) · [Architecture](#-architecture)
+
+<br>
+
+<img src="docs/screenshots/home.jpg" alt="finmax Home: a featured title over frosted glass" width="88%">
+
+</div>
+
+<br>
+
+> [!WARNING]
+> finmax is in **alpha**. It's used daily on a Chromecast with Google TV, but expect rough edges, and please [open an issue](https://github.com/ILostXD/finmax/issues) when you find one.
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🎬 Browsing that feels like a cinema
+- **Hero carousel** of unwatched titles, then rows that glide up on Down.
+- **Live previews**: a card you rest on plays its own footage and hands it straight to the player, with no restart.
+- **Details pages** whose background *is* the film: the clip plays behind frosted glass that blurs the video itself.
+- **Cast pages** for every actor, with their whole filmography in your library.
+- Continue Watching and Next Up, optionally **merged into one row**.
+- **Reorder or hide Home rows**, browse **playlists**, genres and collections.
+
+</td>
+<td width="50%" valign="top">
+
+### ▶️ A player that just works
+- **Two engines**: ExoPlayer, plus **mpv** for full ASS/SSA styling, picked automatically per file.
+- **Direct Play first**; the server only converts what the TV really can't decode.
+- **Refresh-rate matching**: 23.976 fps films play at 23.976 Hz.
+- **Episode queue**, skip intro/recap/credits, trickplay thumbnails, Up Next.
+- Dolby and DTS audio decoded on the device (FFmpeg) when the TV can't.
+- **AV1** through software decoding, within what the device can handle.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 💬 Subtitles that line up
+- **Live delay** in steps, remembered per title and track.
+- **Sync assistant** that tells a constant offset from a frame-rate mismatch or a different cut.
+- **Sync to a line**: press OK as a line is spoken; two points also fix drift.
+- Search and download from Jellyfin's providers or **Bazarr**.
+- Netflix-style **drop shadow**, size, background and position.
+
+</td>
+<td valign="top">
+
+### 🍿 Everything around it
+- **Discover** powered by Seerr/Jellyseerr: trending, genres, search, request status and one-press requests, with season picking for shows.
+- **Who's watching** profiles with optional **PIN locks**.
+- **Screensaver**, inside the app and as the Android TV screensaver.
+- **In-app updates** straight from GitHub releases.
+- Quick Connect sign-in, server discovery, Keystore-encrypted tokens.
+
+</td>
+</tr>
+</table>
+
+## 📸 Screenshots
+
+<div align="center">
+<table>
+<tr>
+<td><img src="docs/screenshots/details.jpg" alt="Details"></td>
+<td><img src="docs/screenshots/home-rows.jpg" alt="Home rows"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Details</b> · artwork melting into frosted glass</sub></td>
+<td align="center"><sub><b>Home rows</b> · the focused card opens into its art</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/series.jpg" alt="Series"></td>
+<td><img src="docs/screenshots/episodes.jpg" alt="Episodes"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Series</b> · pick up the next episode</sub></td>
+<td align="center"><sub><b>Episodes</b> · seasons at a glance</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/cast.jpg" alt="Cast"></td>
+<td><img src="docs/screenshots/settings.jpg" alt="Settings"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Cast</b> · every actor has their own page</sub></td>
+<td align="center"><sub><b>Settings</b> · a live preview of your subtitle style</sub></td>
+</tr>
+</table>
+<sub>Captured on a Chromecast with Google TV.</sub>
+</div>
+
+## 📦 Install
+
+No computer and no developer mode needed.
+
+1. On the TV, install **Downloader** (by AFTVnews) from the Play Store.
+2. Allow it to install apps: *Settings → Apps → Security & restrictions → Unknown sources → Downloader*.
+3. Open Downloader and enter:
+   ```
+   https://github.com/ILostXD/finmax/releases/latest/download/finmax.apk
+   ```
+4. Install, open **finmax**, and sign in to your Jellyfin server.
+
+Updates arrive inside the app: a dot appears on the Settings icon, and one press installs the new version.
+
+<details>
+<summary><b>Install with ADB instead</b></summary>
+
+```bash
+adb install -r finmax.apk
+```
+
+</details>
+
+## 🛠️ Build from source
+
+Needs JDK 17 and the Android SDK (platform 36).
 
 ```bash
 ./gradlew :app:assembleRelease
@@ -12,83 +148,60 @@ A native Android TV client for Jellyfin: cinematic browsing, reliable ExoPlayer 
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-Use the release build on the TV. The debug build is unminified Compose and is several times slower on low-end devices like the Chromecast with Google TV. Release is signed with the local debug key for now.
+Always run the **release** build on a TV: debug Compose is about four times slower on low-end hardware.
 
 ```bash
 ./gradlew :app:testDebugUnitTest
 ```
 
-## Stack
+Add `-Pscreenshots` to render every screen at 1080p into `app/build/screenshots/`, against a fake server, with no TV needed.
 
-Kotlin, Jetpack Compose for TV (`tv-material`), Media3 ExoPlayer (+HLS, OkHttp data source, MediaSession), official Jellyfin Kotlin SDK 1.7.1, Coil 3, OkHttp. No DI framework and no navigation library: a small app container (`FinmaxApp`) and a back stack (`ui/Navigator.kt`) keep the dependency count down.
+## 🧭 Architecture
 
-## Layout
+Kotlin, Jetpack Compose for TV, Media3 (ExoPlayer + an mpv engine), the official Jellyfin Kotlin SDK, Coil 3 and OkHttp. No DI framework and no navigation library: a small app container (`FinmaxApp`) and a back stack (`ui/Navigator.kt`) keep it light.
 
-| Path | What it does |
+| Path | What lives there |
 |---|---|
-| `data/` | Sessions, servers and users (`SessionManager`), all library calls (`MediaRepository`), Keystore-encrypted secrets (`SecureStore`), settings, and `IoApiClient`, which moves every SDK request off the main thread (the SDK's OkHttp backend reads bodies on the caller thread). |
-| `playback/` | Device codec/passthrough detection and the Jellyfin `DeviceProfile`; `PlayerController` owns ExoPlayer, the play decision, track mapping, progress reporting, segments and episode navigation. |
-| `subtitles/` | SRT/VTT/ASS parser and timing model, `SyncAnalyzer` (alignment, unit tested), `SyncAssistant`, `SubtitleSources` (server subtitles, remote search, remembered corrections), `BazarrClient`. |
-| `ui/` | Screens (login, home, browse, search, details, player, settings, profiles) and shared components and theme. |
+| `data/` | Sessions, servers and users, every library call (`MediaRepository`), Seerr and settings, Keystore-encrypted secrets. All SDK calls run off the main thread. |
+| `playback/` | Device codec detection and the Jellyfin device profile, `PlayerController` (play decision, tracks, progress, segments, queue), `MpvPlayer`, refresh-rate switching. |
+| `subtitles/` | SRT/VTT/ASS parsing, `SyncAnalyzer` (unit tested), the sync assistant, subtitle sources and Bazarr. |
+| `update/` | GitHub release checks and installs. |
+| `ui/` | Every screen, plus shared components and the theme. |
 
-## Design
+<details>
+<summary><b>How the subtitle sync assistant works</b></summary>
 
-The look is built from the brand card in `reference/brand/` (palette, the finmax wordmark and "f" mark) and the two layouts in `reference/inspiration/`.
+finmax downloads every text subtitle as SRT and renders it itself, so timing changes live without restarting playback. The correction is linear: `shown = t × scale + offset`.
 
-- **Palette** (`ui/theme/Theme.kt`): Chlorophyll Void `#1B3100` is the base everything sits in; Taut Orchid `#8D3F7D` marks primary actions and the focus glow; Ionized Parchment `#FFF2C5` is the text colour and the focus fill.
-- **Type**: Bricolage Grotesque, the logo's typeface (variable, bundled in `res/font`, OFL). Titles use the display optical size at weight 600 like the logo; reading text uses the text optical size; labels are small tracked capitals.
-- **Home** is a vertical carousel of random titles: artwork on the left, title, facts and actions on the right. Up/Down moves through it (it also advances every 10 s); Up on the first slide reaches the top bar, and so does Back. Right from the last button slides the artwork aside and opens the recommendations panel: Continue Watching, Next Up, new arrivals, My List, "Because you watched", collections and genre picks as one numbered vertical list. The focused title is described over its own artwork. Left or Back closes it.
-- **Details** show the artwork first, then fade in the title's local trailer or, if it has none, short muted clips of the film itself from random points (Settings → Details pages; off, trailers only, or trailers and clips, with optional sound). The header has the title, actions and a glass fact column (premiere, director, writers, music, genre, studio, runtime with end time) with a Watch Trailer tile. Below the fold come numbered sections: episodes, cast, more like this and file details.
-- **Screenshots without a TV**: `./gradlew :app:testDebugUnitTest -Pscreenshots` signs in to a fake server inside the test, walks every page with the D-pad and writes 1080p PNGs to `app/build/screenshots/app/` (sign-in, Home, browse grids, search, settings, profiles, details for movies, series and collections, player controls).
-
-## Feature status
-
-Tested on the target device (Chromecast with Google TV 4K, Android 14) against the Jellyfin 12.4 server.
-
-The redesigned Home and details screens (see Design) haven't been tried on the TV yet; the behaviour below was verified with the previous layout.
-
-**Implemented and verified on the TV**
-- Server discovery (UDP) and manual address, Quick Connect sign-in, remembered sessions, token encrypted with the Android Keystore.
-- Home: featured titles, Continue Watching, Next Up, Recently Added per library, My List, "Because you watched" recommendations, collections, random genre picks, recently watched, libraries.
-- Movies and TV Shows grids with sort, filter (unwatched, watched, My List, in progress) and genre; paged loading.
-- Search with an on-screen TV keyboard.
-- Details: logo, ratings, critic score, tagline, cast and crew, tech badges, resume progress, seasons and episodes, More like this, collection contents, My List, mark watched.
-- Playback: Direct Play, falling back to server Direct Stream/Transcode when the server says so or the device fails to decode. Resume, progress reporting, skip recap/intro/credits from Jellyfin media segments, previous/next episode, D-pad seek, media keys, captions key.
-- Playback info panel: method (including "video untouched, audio converted"), codecs, resolution, tracks, renderer, transcode reasons from the server session.
-- Subtitles: delay ±step/±1 s/reset, live and remembered per title and subtitle; sync assistant (see below); style (size, background, position).
-
-**Implemented, not yet exercised on this server**
-- Password login, profile and server switching, sign-out.
-- Audio track switching (direct play maps tracks in place; transcoded streams restart at the same position).
-- Up Next card with countdown and "Still watching?" after 3 autoplays.
-- Remote subtitle search and preview through Jellyfin's subtitle providers. Your user returned 403: enable **Allow subtitle management** for it in Dashboard → Users, and install a provider plugin such as OpenSubtitles.
-- Bazarr: provider search, download, and audio sync (ffsubsync). The API was verified against Bazarr's source, but no Bazarr instance was available to test against.
-- Image subtitles (PGS/VobSub): embedded for direct play, burned in when transcoding.
-
-**Planned or not supported**
-- Music, Live TV, photos and books libraries are hidden, not faked.
-- Playlists, a per-user home layout editor, PIN-protected profiles, trickplay thumbnails, refresh-rate switching, MPV backend and theme music (all Wholphin features) aren't built yet.
-- On-device audio-based sync: too heavy for TV hardware. Bazarr's server-side ffsubsync covers it.
-- ASS styling: ASS/SSA text is rendered as plain text so it can be retimed.
-
-## Subtitle sync assistant
-
-FINMAX downloads every text subtitle from Jellyfin as SRT and renders it itself, so timing can be corrected live without restarting playback. The correction is linear: `shown = t × scale + offset`.
-
-"Fix subtitle sync…" in the player's subtitle panel:
-1. Reads the file name, frame rate, runtime and the selected subtitle.
-2. Compares dialogue timing against a reference track. Embedded tracks are trusted. Another external file is used only as a labelled relative guide.
+1. Reads the file name, frame rate, runtime and selected subtitle.
+2. Compares dialogue timing against a reference track. Embedded tracks are trusted; another external file only counts as a labelled guide.
 3. Classifies the problem:
-   - **constant offset**: a delay fixes it
-   - **frame-rate mismatch**: needs a speed correction, e.g. 23.976↔25 fps
-   - **different cut**: offsets jump between sections, so it says no delay can fix it
-   - **unknown**
-4. Ranks alternatives: other tracks, server providers (a hash match counts strongly), and Bazarr. It uses release-name and edition matching and, when a trusted reference exists, measured alignment.
-5. Nothing changes until you choose Preview and then Apply. Downloads happen only on Apply.
-6. **Sync to a line**: press OK as a listed line is spoken. One point fixes the delay; two points far apart also fix drift.
+   - **constant offset**: a delay fixes it;
+   - **frame-rate mismatch**: needs a speed change, e.g. 23.976 ↔ 25 fps;
+   - **different cut**: offsets jump between sections, and it says so;
+   - **unknown**.
+4. Ranks alternatives: other tracks, server providers (hash matches count strongly) and Bazarr, by release name, edition and measured alignment.
+5. Nothing changes until you Preview and Apply. Downloads happen only on Apply.
 
-## Known limitations
+</details>
 
-- On this TV no AC3/E-AC3 output is advertised, so Dolby audio is converted to AAC by the server. Video stays untouched.
-- When the file's default audio track isn't the language you want (one episode defaulted to Hindi), set **Settings → Preferred audio language**.
-- Screenshots over ADB don't capture the video layer on this device; player UI checks used the accessibility tree.
+## 🗺️ Roadmap
+
+- [x] Playlists, Home row editor, profile PINs
+- [x] mpv engine, refresh-rate matching, AV1
+- [x] Screensaver and in-app updates
+- [ ] Discover polish
+- [ ] Theme music
+- [ ] Music, Live TV and photo libraries (hidden for now, not faked)
+
+## 🙏 Acknowledgements
+
+- [Jellyfin](https://jellyfin.org), for the server and the Kotlin SDK.
+- [Wholphin](https://github.com/damontecres/Wholphin), the functional reference.
+- [libmpv-android](https://github.com/jarnedemeulemeester/libmpv-android) via Findroid, [Media3](https://developer.android.com/media/media3), [Lucide](https://lucide.dev) icons and [Bricolage Grotesque](https://github.com/ateliertriay/bricolage).
+
+finmax isn't affiliated with Jellyfin, Netflix or Seerr.
+
+## 📄 License
+
+[GPL-3.0](LICENSE)

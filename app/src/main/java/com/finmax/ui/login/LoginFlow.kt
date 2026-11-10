@@ -1,5 +1,7 @@
 package com.finmax.ui.login
 
+import com.finmax.ui.components.Ic
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -128,7 +130,7 @@ private fun ServerList(onPick: (SavedServer) -> Unit, onAdd: () -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
         items(sessions.servers, key = { it.id }) { server ->
             val first = server == sessions.servers.first()
-            ChoiceTile(server.name, server.url, Icons.Filled.Dns, onClick = { onPick(server) }, requestFocus = first)
+            ChoiceTile(server.name, server.url, Ic.Server, onClick = { onPick(server) }, requestFocus = first)
         }
         item { ChoiceTile("Add server", "Enter an address", null, onClick = onAdd) }
     }
@@ -209,7 +211,7 @@ private fun AddServer(onFound: (SavedServer) -> Unit) {
     Spacer(Modifier.height(14.dp))
     LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
         items(discovered, key = { it.second }) { (name, addr) ->
-            ChoiceTile(name, addr, Icons.Filled.Dns, onClick = { address = addr; connect(addr) })
+            ChoiceTile(name, addr, Ic.Server, onClick = { address = addr; connect(addr) })
         }
     }
 }
@@ -235,17 +237,17 @@ private fun UserPicker(server: SavedServer, onQuickConnect: () -> Unit, onPasswo
     LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(12.dp), modifier = Modifier.offset(x = (-12).dp)) {
         items(saved, key = { "saved/" + it.userId }) { u ->
             val img = u.imageTag?.let { "${server.url.trimEnd('/')}/Users/${u.userId}/Images/Primary?tag=$it&maxWidth=120" }
-            ChoiceTile(u.name, "Continue", Icons.Filled.Person, { sessions.activate(u) }, img, requestFocus = u == saved.first())
+            ChoiceTile(u.name, "Continue", Ic.Person, { sessions.activate(u) }, img, requestFocus = u == saved.first())
         }
         if (qcEnabled == true) {
             item { ChoiceTile("Quick Connect", "Approve from your phone", null, onQuickConnect, requestFocus = saved.isEmpty()) }
         }
         items(publicUsers.filter { p -> saved.none { it.userId.replace("-", "") == p.id.toString().replace("-", "") } }, key = { it.id }) { u ->
             val img = u.primaryImageTag?.let { "${server.url.trimEnd('/')}/Users/${u.id}/Images/Primary?tag=$it&maxWidth=120" }
-            ChoiceTile(u.name ?: "User", "Password", Icons.Filled.Person, { onPassword(u.name ?: "") }, img)
+            ChoiceTile(u.name ?: "User", "Password", Ic.Person, { onPassword(u.name ?: "") }, img)
         }
         item {
-            ChoiceTile("Other user", "Type a username", Icons.Filled.Person, { onPassword("") }, requestFocus = saved.isEmpty() && qcEnabled == false)
+            ChoiceTile("Other user", "Type a username", Ic.Person, { onPassword("") }, requestFocus = saved.isEmpty() && qcEnabled == false)
         }
     }
     if (qcEnabled == false) {
@@ -365,8 +367,16 @@ fun FmTextField(
     val boxReq = remember { FocusRequester() }
     val fieldReq = remember { FocusRequester() }
     if (requestFocus) LaunchedEffect(Unit) { delay(80); runCatching { boxReq.requestFocus() } }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // The field reports "not focused" when it first appears; only a real loss of focus ends editing.
+    var hadFocus by remember { mutableStateOf(false) }
     LaunchedEffect(editing) {
-        if (editing) { delay(30); runCatching { fieldReq.requestFocus() } }
+        hadFocus = false
+        if (editing) {
+            delay(30)
+            runCatching { fieldReq.requestFocus() }
+            keyboard?.show()
+        }
     }
     val shape = RoundedCornerShape(percent = 50)
     Column(modifier) {
@@ -386,7 +396,10 @@ fun FmTextField(
                     onDone?.invoke()
                 }),
                 modifier = Modifier.fillMaxWidth().focusRequester(fieldReq)
-                    .onFocusChanged { if (!it.isFocused && editing) editing = false }
+                    .onFocusChanged {
+                        if (it.isFocused) hadFocus = true
+                        else if (hadFocus && editing) editing = false
+                    }
                     .background(Fm.Surface, shape).border(BorderStroke(2.dp, Fm.Accent), shape)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             )

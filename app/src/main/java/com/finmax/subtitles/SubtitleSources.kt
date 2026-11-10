@@ -26,14 +26,16 @@ fun MediaStream.syncKey(): String =
  * remembers accepted sync corrections per media + subtitle.
  */
 class SubtitleSources(context: Context, private val http: OkHttpClient) {
+    // Embedded subtitles: the server reads the whole file before answering (minutes from a cloud mount).
+    private val patient = http.newBuilder().readTimeout(20, java.util.concurrent.TimeUnit.MINUTES).build()
     private val prefs = context.getSharedPreferences("finmax_subsync", Context.MODE_PRIVATE)
     private val cache = object : LinkedHashMap<String, List<Cue>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Cue>>?) = size > 8
     }
 
-    private suspend fun fetch(session: Session, path: String): String = withContext(Dispatchers.IO) {
+    private suspend fun fetch(session: Session, path: String, client: OkHttpClient = http): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(session.server.url.trimEnd('/') + path).header("Authorization", session.authHeader).build()
-        http.newCall(req).execute().use { r ->
+        client.newCall(req).execute().use { r ->
             if (!r.isSuccessful) error("Server returned ${r.code} for subtitle")
             r.body!!.string()
         }
@@ -42,7 +44,7 @@ class SubtitleSources(context: Context, private val http: OkHttpClient) {
     suspend fun cues(session: Session, itemId: UUID, mediaSourceId: String, streamIndex: Int): List<Cue> {
         val key = "$itemId/$mediaSourceId/$streamIndex"
         synchronized(cache) { cache[key] }?.let { return it }
-        val text = fetch(session, "/Videos/$itemId/$mediaSourceId/Subtitles/$streamIndex/0/Stream.srt")
+        val text = fetch(session, "/Videos/$itemId/$mediaSourceId/Subtitles/$streamIndex/0/Stream.srt", patient)
         val cues = withContext(Dispatchers.Default) { SubtitleParser.parse(text, "srt") }
         synchronized(cache) { cache[key] = cues }
         return cues

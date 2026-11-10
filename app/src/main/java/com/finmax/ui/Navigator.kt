@@ -19,12 +19,24 @@ sealed interface Route {
     data class Library(val id: UUID, val name: String, val type: org.jellyfin.sdk.model.api.CollectionType? = null) : Route
     data class Genre(val name: String, val parentId: UUID?) : Route
     data class Detail(val id: UUID) : Route
+    /** A cast or crew member: their photo, biography and everything of theirs in the library. */
+    data class Person(val id: UUID) : Route
+    /** A Discover title not (fully) in the library: its page, with the request button. */
+    data class SeerrTitle(val item: com.finmax.data.SeerrItem, val requestNow: Boolean = false) : Route
+    data object SeerrSearch : Route
+    data class SeerrGenre(val genre: com.finmax.data.SeerrGenre) : Route
     data class Player(
         val itemId: UUID,
         val fromStart: Boolean = false,
         val mediaSourceId: String? = null,
         val audioIndex: Int? = null,
         val subtitleIndex: Int? = null,
+        /** Where to start; null resumes from the saved position (or the start with [fromStart]). */
+        val startMs: Long? = null,
+        /** Playing through a playlist: the queue is its items instead of the show's episodes. */
+        val playlistId: UUID? = null,
+        /** Set when playback moved to mpv (styled subtitles); otherwise the setting decides. */
+        val mpv: Boolean = false,
     ) : Route
     data object Profiles : Route
 }

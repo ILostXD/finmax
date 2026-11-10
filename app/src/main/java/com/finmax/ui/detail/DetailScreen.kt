@@ -1,5 +1,8 @@
 package com.finmax.ui.detail
 
+import com.finmax.ui.components.Ic
+import com.finmax.ui.components.friendlyError
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,6 +20,7 @@ import com.finmax.ui.components.Hairline
 import com.finmax.ui.components.IconButton
 import com.finmax.ui.components.Overline
 import com.finmax.ui.components.Wordmark
+import androidx.compose.foundation.layout.offset
 import com.finmax.ui.components.episodeLabel
 import com.finmax.ui.home.BigTitle
 import com.finmax.ui.home.RatingLine
@@ -93,6 +97,13 @@ import com.finmax.ui.home.open
 import com.finmax.ui.library.SidePanel
 import com.finmax.ui.theme.Fm
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import com.finmax.data.DetailVideo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.MediaStreamType
@@ -110,6 +121,8 @@ class DetailState(private val repo: MediaRepository, val id: UUID, autoLoad: Boo
     var favorite by mutableStateOf(false)
     var played by mutableStateOf(false)
     var trailer by mutableStateOf<BaseItemDto?>(null)
+    /** The page already faded into the player once; back here it doesn't do it again. */
+    var handedOff = false
 
     // Pre-play choices from the "Audio & Subtitles" panel.
     var mediaSourceId by mutableStateOf<String?>(null)
@@ -134,6 +147,7 @@ class DetailState(private val repo: MediaRepository, val id: UUID, autoLoad: Boo
                 target?.let(::selectSeason)
             }
             BaseItemKind.BOX_SET -> scope.launch { children = runCatching { repo.collectionItems(id) }.getOrDefault(emptyList()) }
+            BaseItemKind.PLAYLIST -> scope.launch { children = runCatching { repo.playlistItems(id) }.getOrDefault(emptyList()) }
             else -> Unit
         }
         it
@@ -157,6 +171,9 @@ class DetailState(private val repo: MediaRepository, val id: UUID, autoLoad: Boo
     }
 }
 
+/** How long the page must be left alone before it fades into the playing film. */
+private const val FILM_IDLE_MS = 5_000L
+
 @Composable
 fun DetailScreen(id: UUID) {
     val repo = FinmaxApp.instance.repo
@@ -173,9 +190,17 @@ fun DetailScreen(id: UUID) {
 internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository) {
     val nav = LocalNav.current
     var tracksOpen by remember { mutableStateOf(false) }
+    var playlistOpen by remember { mutableStateOf(false) }
     val isSeries = item.type == BaseItemKind.SERIES
+    val isPlaylist = item.type == BaseItemKind.PLAYLIST
     val isPlayable = item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE, BaseItemKind.VIDEO, BaseItemKind.MUSIC_VIDEO)
-    val playTarget = if (isSeries) state.nextUp ?: state.episodes.firstOrNull() else item.takeIf { isPlayable }
+    val playTarget = when {
+        isSeries -> state.nextUp ?: state.episodes.firstOrNull()
+        // A playlist carries on with the first title not watched to the end.
+        isPlaylist -> state.children.firstOrNull { it.userData?.played != true } ?: state.children.firstOrNull()
+        else -> item.takeIf { isPlayable }
+    }
+    val playlistId = item.id.takeIf { isPlaylist }
     val scope = rememberCoroutineScope()
     val cast = item.people.orEmpty().filter { it.type == PersonKind.ACTOR }.take(24)
 
@@ -190,23 +215,65 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
         add("head")
         if (isSeries && state.seasons.isNotEmpty()) add("seasons")
         if (state.children.isNotEmpty()) add("children")
-        if (cast.isNotEmpty()) add("cast")
-        if (state.similar.isNotEmpty()) add("similar")
+        if (cast.isNotEmpty() || state.similar.isNotEmpty()) add("more")
     }
     fun Modifier.snapOnFocus(key: String) = onFocusChanged { f ->
         if (f.hasFocus) scope.launch { state.list.animateScrollToItem(keys.indexOf(key).coerceAtLeast(0)) }
     }
     val screenHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.55f else 0f, androidx.compose.animation.core.tween(500), label = "dim")
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.45f else 0f, androidx.compose.animation.core.tween(600), label = "dim")
+    // Scrolled past the header: the picture melts fully into the glass as it darkens.
+    val frost by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 1f else 0f, androidx.compose.animation.core.tween(600), label = "frost")
 
-    Box(Modifier.fillMaxSize().background(Fm.Bg)) {
-      Box(Modifier.fillMaxSize().popoverBlur(tracksOpen, 440.dp)) {
+    // Like Netflix, a movie's page plays the film itself (from where you stopped) behind the text;
+    // left alone, the text fades away and the player takes the running video over.
+    val settings by FinmaxApp.instance.settings.state.collectAsState()
+    val film = isPlayable && !state.handedOff && settings.detailVideo == DetailVideo.CLIPS &&
+        item.mediaSources?.firstOrNull()?.supportsDirectPlay != false
+    val filmFromMs = ((item.userData?.playbackPositionTicks ?: 0) / 10_000 - settings.resumeRewindSec * 1000L).coerceAtLeast(0)
+    val leave = remember { androidx.compose.animation.core.Animatable(0f) }
+    var lastKey by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    val handOff: (() -> Long) -> Unit = { handOver ->
+        scope.launch {
+            while (true) {
+                // Only once the page is left alone, at the top, with nothing open.
+                while (System.currentTimeMillis() - lastKey < FILM_IDLE_MS || scrolled || tracksOpen || playlistOpen) delay(250)
+                try {
+                    leave.animateTo(1f, androidx.compose.animation.core.tween(1200, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                    break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    if (!isActive) throw e // a key press snapped the page back: wait for quiet again
+                }
+            }
+            state.handedOff = true
+            nav.push(Route.Player(item.id, false, state.mediaSourceId, state.audioIndex, state.subtitleIndex, startMs = handOver()))
+        }
+    }
+
+    Box(
+        Modifier.fillMaxSize().background(Fm.Bg).onPreviewKeyEvent {
+            lastKey = System.currentTimeMillis()
+            if (leave.value > 0f && !state.handedOff) scope.launch { leave.snapTo(0f) }
+            false
+        },
+    ) {
+      Box(Modifier.fillMaxSize().popoverBlur(tracksOpen || playlistOpen, 440.dp)) {
         GlassBackdrop(
-            repo.backdrop(item), soft = repo.backdrop(item, 320), dim = dim,
-            sharp = { AmbientVideo(item, playing = !scrolled && !tracksOpen) },
+            repo.backdrop(item), soft = repo.backdrop(item, 320), dim = dim * (1f - leave.value), clear = leave.value,
+            live = true, frost = frost * (1f - leave.value),
+            sharp = {
+                AmbientVideo(
+                    item, playing = !scrolled && !tracksOpen && !playlistOpen, fit = leave.value,
+                    resumeMs = filmFromMs.takeIf { film },
+                    onHandOff = handOff.takeIf { film },
+                )
+            },
         )
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoAutoScroll) {
-        LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 36.dp), modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = state.list, contentPadding = PaddingValues(bottom = 36.dp),
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - leave.value },
+        ) {
             item(key = "head") {
                 Column(
                     Modifier.height(screenHeight).fillMaxWidth()
@@ -217,7 +284,7 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
                     Spacer(Modifier.weight(1f))
                     TitleBlock(item, repo, cast.take(3).mapNotNull { it.name })
                     Spacer(Modifier.height(20.dp))
-                    Actions(item, state, playTarget, isSeries, isPlayable, onTracks = { tracksOpen = true }, onEpisodes = {
+                    Actions(item, state, playTarget, isSeries, isPlayable, playlistId, onTracks = { tracksOpen = true }, onPlaylist = { playlistOpen = true }, onEpisodes = {
                         scope.launch { state.list.animateScrollToItem(1) }
                     })
                     playTarget?.progress?.let { p ->
@@ -263,30 +330,38 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
             if (state.children.isNotEmpty()) {
                 item(key = "children") {
                     Section(Modifier.snapOnFocus("children")) {
-                        SectionTitle("In this collection")
-                        MediaRow("", state.children, CardStyle.POSTER, "children", onOpen = { nav.open(it) }, showTitle = false)
-                    }
-                }
-            }
-            if (cast.isNotEmpty()) {
-                item(key = "cast") {
-                    Section(Modifier.snapOnFocus("cast")) {
-                        SectionTitle("Cast")
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
-                            modifier = Modifier.focusRestorer(),
-                        ) {
-                            items(cast, key = { it.id.toString() + it.role }) { p -> PersonCard(p, repo) }
+                        if (isPlaylist) {
+                            SectionTitle("In this playlist")
+                            // Picking a title plays the playlist from there.
+                            MediaRow("", state.children, CardStyle.LANDSCAPE, "children", onOpen = { nav.push(Route.Player(it.id, playlistId = item.id)) })
+                        } else {
+                            SectionTitle("In this collection")
+                            MediaRow("", state.children, CardStyle.POSTER, "children", onOpen = { nav.open(it) }, showTitle = false)
                         }
                     }
                 }
             }
-            if (state.similar.isNotEmpty()) {
-                item(key = "similar") {
-                    Section(Modifier.snapOnFocus("similar")) {
-                        SectionTitle("More like this")
-                        MediaRow("", state.similar, CardStyle.POSTER, "similar", onOpen = { nav.open(it) }, showTitle = false)
+            // Cast and More like this share one screen (sized to fit with room below), so moving
+            // between them never shifts the page.
+            if (cast.isNotEmpty() || state.similar.isNotEmpty()) {
+                item(key = "more") {
+                    Section(Modifier.snapOnFocus("more").padding(top = 6.dp)) {
+                        if (cast.isNotEmpty()) {
+                            SectionTitle("Cast")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = Fm.SafeH, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Fm.CardGap),
+                                modifier = Modifier.focusRestorer(),
+                            ) {
+                                items(cast, key = { it.id.toString() + it.role }) { p ->
+                                    PersonCard(p, repo) { nav.push(Route.Person(p.id)) }
+                                }
+                            }
+                        }
+                        if (state.similar.isNotEmpty()) {
+                            SectionTitle("More like this")
+                            MediaRow("", state.similar, CardStyle.POSTER, "similar", onOpen = { nav.open(it) }, showTitle = false, cardWidth = 116.dp)
+                        }
                     }
                 }
             }
@@ -296,6 +371,10 @@ internal fun Detail(item: BaseItemDto, state: DetailState, repo: MediaRepository
         if (tracksOpen) {
             BackHandler { tracksOpen = false }
             TrackPicker(item, state, onDone = { tracksOpen = false })
+        }
+        if (playlistOpen) {
+            BackHandler { playlistOpen = false }
+            PlaylistPicker(item, repo, onDone = { playlistOpen = false })
         }
     }
 }
@@ -313,7 +392,7 @@ private fun Section(modifier: Modifier, content: @Composable () -> Unit) {
 @Composable
 private fun Header(item: BaseItemDto, modifier: Modifier = Modifier) {
     Row(modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-        Wordmark(20.dp)
+        Wordmark(20.dp, Modifier.offset(y = -com.finmax.ui.components.LogoLift))
         Spacer(Modifier.width(26.dp))
         val crumbs = listOfNotNull(
             when (item.type) {
@@ -412,7 +491,9 @@ private fun Actions(
     playTarget: BaseItemDto?,
     isSeries: Boolean,
     isPlayable: Boolean,
+    playlistId: UUID?,
     onTracks: () -> Unit,
+    onPlaylist: () -> Unit,
     onEpisodes: () -> Unit,
 ) {
     val nav = LocalNav.current
@@ -425,26 +506,27 @@ private fun Actions(
             }
             PillButton(
                 label,
-                { nav.push(Route.Player(playTarget.id, false, state.mediaSourceId, state.audioIndex, state.subtitleIndex)) },
-                icon = Icons.Filled.PlayArrow, primary = true,
+                { nav.push(Route.Player(playTarget.id, false, state.mediaSourceId, state.audioIndex, state.subtitleIndex, playlistId = playlistId)) },
+                icon = Ic.Play, primary = true,
                 modifier = Modifier.focusMemory("play", initial = true),
             )
             if (resumeTicks > 0) {
                 GhostButton("From start", {
-                    nav.push(Route.Player(playTarget.id, true, state.mediaSourceId, state.audioIndex, state.subtitleIndex))
-                }, icon = Icons.Filled.Replay, modifier = Modifier.focusMemory("fromstart"))
+                    nav.push(Route.Player(playTarget.id, true, state.mediaSourceId, state.audioIndex, state.subtitleIndex, playlistId = playlistId))
+                }, icon = Ic.Replay, modifier = Modifier.focusMemory("fromstart"))
             }
         }
         state.trailer?.let { t ->
-            GhostButton("Trailer", { nav.push(Route.Player(t.id, fromStart = true)) }, icon = Icons.Filled.PlayArrow, modifier = Modifier.focusMemory("trailer"))
+            GhostButton("Trailer", { nav.push(Route.Player(t.id, fromStart = true)) }, icon = Ic.Play, modifier = Modifier.focusMemory("trailer"))
         }
         if (isSeries && state.seasons.isNotEmpty()) GhostButton("Episodes", onEpisodes, arrow = true)
         if (item.type == BaseItemKind.EPISODE && item.seriesId != null) {
             GhostButton("Series", { nav.push(Route.Detail(item.seriesId!!)) }, arrow = true)
         }
-        if (isPlayable) IconButton(Icons.Filled.Subtitles, "Audio & Subtitles", onTracks, Modifier.focusMemory("tracks"))
+        if (isPlayable) IconButton(Ic.Subtitles, "Audio & Subtitles", onTracks, Modifier.focusMemory("tracks"))
+        if (isPlayable) IconButton(Ic.ListPlus, "Add to playlist", onPlaylist, Modifier.focusMemory("playlist"))
         IconButton(
-            if (state.favorite) Icons.Filled.Check else Icons.Filled.Add,
+            if (state.favorite) Ic.Check else Ic.Add,
             if (state.favorite) "In My List" else "Add to My List",
             { state.toggleFavorite() },
             Modifier.focusMemory("fav"),
@@ -452,7 +534,7 @@ private fun Actions(
         )
         if (item.type != BaseItemKind.BOX_SET) {
             IconButton(
-                Icons.Filled.DoneAll, if (state.played) "Watched" else "Mark watched", { state.togglePlayed() },
+                Ic.DoneAll, if (state.played) "Watched" else "Mark watched", { state.togglePlayed() },
                 Modifier.focusMemory("played"), active = state.played,
             )
         }
@@ -486,9 +568,9 @@ private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit, mod
 }
 
 @Composable
-private fun PersonCard(p: org.jellyfin.sdk.model.api.BaseItemPerson, repo: MediaRepository) {
-    Column(Modifier.width(108.dp)) {
-        FocusTile(onClick = {}, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+private fun PersonCard(p: org.jellyfin.sdk.model.api.BaseItemPerson, repo: MediaRepository, onClick: () -> Unit) {
+    Column(Modifier.width(92.dp)) {
+        FocusTile(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
             repo.personImage(p.id, p.primaryImageTag)?.let { AsyncImage(it, p.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 ?: Text(p.name?.take(1) ?: "", style = MaterialTheme.typography.displaySmall, color = Fm.TextFaint, modifier = Modifier.align(Alignment.Center))
         }
@@ -560,6 +642,44 @@ private fun TrackPicker(item: BaseItemDto, state: DetailState, onDone: () -> Uni
                 )
             }
             item { Spacer(Modifier.height(8.dp)); PillButton("Done", onDone) }
+        }
+    }
+}
+
+/** Adds the title to one of the user's playlists, or to a new one. */
+@Composable
+private fun PlaylistPicker(item: BaseItemDto, repo: MediaRepository, onDone: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var lists by remember { mutableStateOf<List<BaseItemDto>?>(null) }
+    var name by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { lists = runCatching { repo.playlists() }.getOrDefault(emptyList()) }
+    fun run(block: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            runCatching { block() }.onSuccess { onDone() }.onFailure { error = friendlyError(it) }
+            busy = false
+        }
+    }
+    fun create() { if (name.isNotBlank()) run { repo.createPlaylist(name.trim(), item.id) } }
+    SidePanel("Add to playlist", width = 440.dp) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(lists.orEmpty(), key = { it.id }) { p ->
+                com.finmax.ui.components.PopoverItem(
+                    p.name ?: "Playlist", { run { repo.addToPlaylist(p.id, item.id) } },
+                    modifier = Modifier.fillMaxWidth().focusMemory("pl/${p.id}", initial = p == lists?.firstOrNull()),
+                )
+            }
+            item { Label("New playlist") }
+            item {
+                com.finmax.ui.login.FmTextField(
+                    name, { name = it }, "Name", Modifier.fillMaxWidth(), requestFocus = lists?.isEmpty() == true, onDone = ::create,
+                )
+            }
+            item { PillButton("Create and add", ::create, primary = name.isNotBlank()) }
+            error?.let { e -> item { Text(e, style = MaterialTheme.typography.bodyMedium, color = Fm.TextDim) } }
         }
     }
 }

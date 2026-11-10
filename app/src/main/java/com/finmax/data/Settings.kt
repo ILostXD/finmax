@@ -7,6 +7,20 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class SegmentAction { ASK, AUTO, OFF }
 
+/** Shadow under subtitle text (without the background box). */
+enum class SubShadow(val label: String) {
+    NONE("None"),
+    SOFT("Soft glow"),
+    DROP("Drop shadow"), // Netflix's: offset down-right, so letters lift off bright scenes
+}
+
+/** Which player plays: mpv draws styled (ASS/SSA) subtitles properly, ExoPlayer is lighter and smoother. */
+enum class PlayerEngine(val label: String) {
+    AUTO("Automatic"),
+    EXO("ExoPlayer"),
+    MPV("mpv"),
+}
+
 /** What plays behind a details page once it has settled. */
 enum class DetailVideo(val label: String) {
     OFF("Off"),
@@ -36,8 +50,63 @@ data class AppSettings(
     val bazarrUrl: String = "",
     val seerrUrl: String = "",
     val detailVideo: DetailVideo = DetailVideo.CLIPS,
-    val detailVideoSound: Boolean = false,
-)
+    val detailVideoSound: Boolean = true,
+    /** Home hero: title and buttons on the right over mirrored art (true) or on the left. */
+    val heroRight: Boolean = true,
+    /** The TV switches to the film's frame rate while it plays. */
+    val matchFrameRate: Boolean = true,
+    /** Next Up episodes join Continue Watching in one row. */
+    val homeMerge: Boolean = false,
+    val homePlaylists: Boolean = true,
+    /** Home row groups top to bottom ([HomeRows] keys); groups missing here keep their default place. */
+    val homeOrder: List<String> = HomeRows.keys,
+    /** Minutes of no input before the screensaver; 0 = off. */
+    val screensaverMin: Int = 5,
+    /** Home groups without their own switch that the user turned off. */
+    val homeHidden: Set<String> = emptySet(),
+    val playerEngine: PlayerEngine = PlayerEngine.AUTO,
+    val subtitleShadow: SubShadow = SubShadow.SOFT,
+) {
+    /** Whether a Home row group ([HomeRows] key) is shown. */
+    fun rowOn(k: String) = when (k) {
+        "resume" -> homeContinue
+        "nextup" -> homeNextUp && !homeMerge
+        "latest" -> homeLatest
+        "fav" -> homeFavorites
+        "collections" -> homeCollections
+        "genrepicks" -> homeGenres
+        "playlists" -> homePlaylists
+        else -> k !in homeHidden
+    }
+
+    fun toggleRow(k: String) = when (k) {
+        "resume" -> copy(homeContinue = !homeContinue)
+        "nextup" -> copy(homeNextUp = !homeNextUp)
+        "latest" -> copy(homeLatest = !homeLatest)
+        "fav" -> copy(homeFavorites = !homeFavorites)
+        "collections" -> copy(homeCollections = !homeCollections)
+        "genrepicks" -> copy(homeGenres = !homeGenres)
+        "playlists" -> copy(homePlaylists = !homePlaylists)
+        else -> copy(homeHidden = if (k in homeHidden) homeHidden - k else homeHidden + k)
+    }
+}
+
+/** Home row groups that can be reordered, in their default order. */
+object HomeRows {
+    val labels = linkedMapOf(
+        "genres" to "Genres", "nextwatch" to "Your Next Watch", "resume" to "Continue Watching", "nextup" to "Next Up",
+        "latest" to "Recently added", "fav" to "My List", "playlists" to "Playlists", "collections" to "Collections",
+        "genrepicks" to "Genre picks", "watched" to "Watched Recently", "libraries" to "Your Libraries",
+    )
+    val keys = labels.keys.toList()
+
+    /** [saved] in order, then any group it doesn't know yet, at its default place. */
+    fun normalized(saved: List<String>): List<String> {
+        val out = saved.filter { it in labels }.distinct().toMutableList()
+        keys.forEachIndexed { i, k -> if (k !in out) out.add(i.coerceAtMost(out.size), k) }
+        return out
+    }
+}
 
 /** Non-secret app preferences. Secrets (Bazarr API key, tokens) live in [SecureStore]. */
 class SettingsStore(context: Context, private val secure: SecureStore) {
@@ -79,7 +148,16 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             .putString("bazarrUrl", s.bazarrUrl)
             .putString("seerrUrl", s.seerrUrl)
             .putString("detailVideo", s.detailVideo.name)
-            .putBoolean("detailVideoSound", s.detailVideoSound)
+            .putBoolean("detailVideoSound2", s.detailVideoSound)
+            .putBoolean("heroRight", s.heroRight)
+            .putBoolean("matchFps", s.matchFrameRate)
+            .putBoolean("hMerge", s.homeMerge)
+            .putBoolean("hPlaylists", s.homePlaylists)
+            .putString("hOrder", s.homeOrder.joinToString(","))
+            .putInt("saverMin", s.screensaverMin)
+            .putStringSet("hHidden", s.homeHidden)
+            .putString("engine", s.playerEngine.name)
+            .putString("subShadow", s.subtitleShadow.name)
             .apply()
     }
 
@@ -109,7 +187,17 @@ class SettingsStore(context: Context, private val secure: SecureStore) {
             bazarrUrl = prefs.getString("bazarrUrl", d.bazarrUrl)!!,
             seerrUrl = prefs.getString("seerrUrl", d.seerrUrl)!!,
             detailVideo = runCatching { DetailVideo.valueOf(prefs.getString("detailVideo", d.detailVideo.name)!!) }.getOrDefault(d.detailVideo),
-            detailVideoSound = prefs.getBoolean("detailVideoSound", d.detailVideoSound),
+            // v2 key: the default became on, and the old key held the old default.
+            detailVideoSound = prefs.getBoolean("detailVideoSound2", d.detailVideoSound),
+            heroRight = prefs.getBoolean("heroRight", d.heroRight),
+            matchFrameRate = prefs.getBoolean("matchFps", d.matchFrameRate),
+            homeMerge = prefs.getBoolean("hMerge", d.homeMerge),
+            homePlaylists = prefs.getBoolean("hPlaylists", d.homePlaylists),
+            homeOrder = HomeRows.normalized(prefs.getString("hOrder", null)?.split(',') ?: d.homeOrder),
+            screensaverMin = prefs.getInt("saverMin", d.screensaverMin),
+            homeHidden = prefs.getStringSet("hHidden", d.homeHidden)!!.toSet(),
+            subtitleShadow = runCatching { SubShadow.valueOf(prefs.getString("subShadow", d.subtitleShadow.name)!!) }.getOrDefault(d.subtitleShadow),
+            playerEngine = runCatching { PlayerEngine.valueOf(prefs.getString("engine", d.playerEngine.name)!!) }.getOrDefault(d.playerEngine),
         )
     }
 }

@@ -147,12 +147,13 @@ class SessionManager(context: Context, val jellyfin: Jellyfin, private val secur
         if (server != null) runCatching { apiFor(server.url, user.token).sessionApi.reportSessionEnded() }
         users = users.filterNot { it.serverId == user.serverId && it.userId == user.userId }
         secure.put("token_${user.serverId}_${user.userId}", null)
+        setPin(user, null)
         persist()
         if (_session.value?.user?.userId == user.userId) deactivate()
     }
 
     fun removeServer(server: SavedServer) {
-        usersOf(server.id).forEach { secure.put("token_${it.serverId}_${it.userId}", null) }
+        usersOf(server.id).forEach { secure.put("token_${it.serverId}_${it.userId}", null); setPin(it, null) }
         users = users.filterNot { it.serverId == server.id }
         servers = servers.filterNot { it.id == server.id }
         persist()
@@ -160,6 +161,17 @@ class SessionManager(context: Context, val jellyfin: Jellyfin, private val secur
     }
 
     fun usersOf(serverId: String) = users.filter { it.serverId == serverId }
+
+    // ---- Profile PINs (this device only; the server knows nothing of them) --------------------
+
+    private fun pinKey(u: SavedUser) = "pin_${u.serverId}_${u.userId}"
+    private fun hash(u: SavedUser, pin: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest("${u.userId}:$pin".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    fun hasPin(u: SavedUser) = secure.get(pinKey(u)) != null
+    fun checkPin(u: SavedUser, pin: String) = secure.get(pinKey(u)).let { it == null || it == hash(u, pin) }
+    fun setPin(u: SavedUser, pin: String?) = secure.put(pinKey(u), pin?.let { hash(u, it) })
 
     private fun persist() {
         prefs.edit().putString(

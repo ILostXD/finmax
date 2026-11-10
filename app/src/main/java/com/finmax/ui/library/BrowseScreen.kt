@@ -1,5 +1,7 @@
 package com.finmax.ui.library
 
+import com.finmax.ui.components.Ic
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -164,13 +166,13 @@ private fun Browse(tab: Route.Tab?, title: String, emptyText: String = "Nothing 
                         PillButton("Sort: ${state.sort.label}", {
                             state.sort = SortChoice.entries[(state.sort.ordinal + 1) % SortChoice.entries.size]
                             state.reload()
-                        }, icon = Icons.AutoMirrored.Filled.Sort, modifier = Modifier.focusMemory("sort", initial = true))
+                        }, icon = Ic.Sort, modifier = Modifier.focusMemory("sort", initial = true))
                         PillButton("Show: ${state.filter.label}", {
                             state.filter = FilterChoice.entries[(state.filter.ordinal + 1) % FilterChoice.entries.size]
                             state.reload()
-                        }, icon = Icons.Filled.FilterList)
+                        }, icon = Ic.Filter)
                         if (state.genres.isNotEmpty()) {
-                            PillButton("Genre: ${state.genre ?: "All"}", { pickingGenre = true }, icon = Icons.Filled.Category)
+                            PillButton("Genre: ${state.genre ?: "All"}", { pickingGenre = true }, icon = Ic.Category)
                         }
                     }
                 }

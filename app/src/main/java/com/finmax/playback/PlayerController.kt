@@ -67,6 +67,8 @@ data class PlayRequest(
     /** Jellyfin subtitle stream index; -1 = off; null = automatic choice. */
     val subtitleIndex: Int? = null,
     val forceTranscode: Boolean = false,
+    /** Queue = this playlist's items; otherwise an episode's queue is its show. */
+    val playlistId: UUID? = null,
 )
 
 /**
@@ -75,13 +77,38 @@ data class PlayRequest(
  * tracks, reports progress, and drives the FINMAX subtitle renderer (text subtitles with timing).
  */
 @OptIn(UnstableApi::class)
-class PlayerController(context: Context, private val app: FinmaxApp, private val session: Session) {
+class PlayerController(context: Context, private val app: FinmaxApp, private val session: Session, adopted: ExoPlayer? = null, mpv: Boolean = false) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val repo = app.repo
 
-    val player: ExoPlayer = ExoPlayer.Builder(
+    /** The player was a background video's, already playing the requested item. */
+    val adoptedPlayer = adopted != null
+
+    /** Set while [player] is a Home preview's player that is already playing the requested item. */
+    private var adopting = adopted != null
+
+    val player: Player = if (mpv && adopted == null) MpvPlayer(context, session.authHeader) else adopted?.apply {
+        // Turn the muted-capable, subtitle-less preview player into a full one.
+        setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
+        setHandleAudioBecomingNoisy(true)
+        volume = 1f
+        trackSelectionParameters = trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+            .build()
+        playWhenReady = true
+    } ?: ExoPlayer.Builder(
         context,
-        DefaultRenderersFactory(context).setEnableDecoderFallback(true),
+        object : DefaultRenderersFactory(context) {
+            // FFmpeg is for audio only: software video decoding would swamp this device.
+            override fun buildVideoRenderers(
+                ctx: Context, mode: Int, selector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+                fallback: Boolean, handler: android.os.Handler, listener: androidx.media3.exoplayer.video.VideoRendererEventListener,
+                joiningMs: Long, out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>,
+            ) = super.buildVideoRenderers(ctx, EXTENSION_RENDERER_MODE_OFF, selector, fallback, handler, listener, joiningMs, out)
+        }.setEnableDecoderFallback(true)
+            // The device decodes none of AC3, E-AC3, DTS or TrueHD; FFmpeg does (see DeviceCapabilities).
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
     )
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(
@@ -93,6 +120,15 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
         .setSeekBackIncrementMs(10_000)
         .setSeekForwardIncrementMs(10_000)
         .build()
+
+    /** mpv draws every embedded subtitle itself (styled ASS included); finmax only draws external ones. */
+    val isMpv = player is MpvPlayer
+
+    /**
+     * Set when this title should play in mpv instead (an ASS/SSA subtitle is chosen and the engine
+     * setting is Automatic): the position to continue from. The screen restarts on mpv.
+     */
+    var switchToMpvAt by mutableStateOf<Long?>(null); private set
     private val mediaSession = MediaSession.Builder(context, player).setId("finmax-${System.nanoTime()}").build()
 
     // ---- Observable state -------------------------------------------------------------------
@@ -108,6 +144,9 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
     var ended by mutableStateOf(false); private set
     var speed by mutableFloatStateOf(1f); private set
     var segments by mutableStateOf<List<MediaSegmentDto>>(emptyList()); private set
+    /** What plays around this title: the show's episodes in order, or the playlist's items. */
+    var queue by mutableStateOf<List<BaseItemDto>>(emptyList()); private set
+    var queueIsPlaylist by mutableStateOf(false); private set
     var nextEpisode by mutableStateOf<BaseItemDto?>(null); private set
     var previousEpisode by mutableStateOf<BaseItemDto?>(null); private set
     var transcodeInfo by mutableStateOf<TranscodingInfo?>(null); private set
@@ -168,6 +207,7 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
 
             override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) { speed = p.speed }
         })
+        isPlaying = player.isPlaying // an adopted player is already running
     }
 
     fun start(req: PlayRequest) {
@@ -224,6 +264,29 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
                 audioIndex = audio ?: src.defaultAudioStreamIndex
                 subtitleIndex = sub
 
+                if (!isMpv && !adopting && !req.forceTranscode && src.supportsDirectPlay && wantsMpv(subStream, settings.playerEngine)) {
+                    switchToMpvAt = req.startMs ?: run {
+                        val ticks = it.userData?.playbackPositionTicks ?: 0
+                        (ticks / TICKS_PER_MS - settings.resumeRewindSec * 1000).coerceAtLeast(0)
+                    }
+                    return@launch
+                }
+
+                if (adopting) {
+                    // The preview is already playing this file (it can, or it wouldn't have run):
+                    // keep it as direct play rather than restart on whatever stream the server offers.
+                    adopting = false
+                    method = PlayMethod.DIRECT_PLAY
+                    if (player.playbackState == Player.STATE_READY) {
+                        loading = false
+                        if (!reportedStart) reportStart()
+                    }
+                    applyTrackOverrides(player.currentTracks)
+                    loadCues()
+                    loadExtras(it)
+                    return@launch
+                }
+
                 val base = session.server.url.trimEnd('/')
                 val (url, m) = when {
                     src.supportsDirectPlay && !req.forceTranscode ->
@@ -263,6 +326,13 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
         }
     }
 
+    /** Styled embedded subtitles look right only in mpv. */
+    private fun wantsMpv(sub: MediaStream?, engine: com.finmax.data.PlayerEngine) = when (engine) {
+        com.finmax.data.PlayerEngine.MPV -> true
+        com.finmax.data.PlayerEngine.EXO -> false
+        com.finmax.data.PlayerEngine.AUTO -> sub != null && !sub.isExternal && sub.codec?.lowercase() in setOf("ass", "ssa")
+    }
+
     private fun preferredAudio(src: MediaSourceInfo?): Int? {
         val lang = app.settings.current.preferredAudioLang.takeIf { it.isNotEmpty() } ?: return null
         return src?.mediaStreams?.firstOrNull { it.type == MediaStreamType.AUDIO && it.language.equals(lang, true) }?.index
@@ -282,12 +352,18 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
         scope.launch {
             segments = runCatching { session.api.mediaSegmentsApi.getItemSegments(it.id).content.items }.getOrDefault(emptyList())
         }
-        if (it.type == BaseItemKind.EPISODE && it.seriesId != null) scope.launch {
-            val all = runCatching { repo.episodes(it.seriesId!!) }.getOrDefault(emptyList())
+        val playlist = request?.playlistId
+        if (playlist != null || (it.type == BaseItemKind.EPISODE && it.seriesId != null)) scope.launch {
+            val all = runCatching {
+                if (playlist != null) repo.playlistItems(playlist) else repo.episodes(it.seriesId!!)
+            }.getOrDefault(emptyList())
             val i = all.indexOfFirst { e -> e.id == it.id }
+            queue = all
+            queueIsPlaylist = playlist != null
             nextEpisode = all.getOrNull(i + 1)?.takeIf { i >= 0 }
             previousEpisode = all.getOrNull(i - 1)
         } else {
+            queue = emptyList()
             nextEpisode = null
             previousEpisode = null
         }
@@ -307,7 +383,10 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
             groups.getOrNull(ordinal)?.let { params.setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0)) }
         }
         val sub = currentSubtitle
-        if (sub != null && !sub.isTextSubtitle && method == PlayMethod.DIRECT_PLAY) {
+        // The player renders image subtitles, and embedded text ones until finmax has their text
+        // (the server may take minutes to extract it); then finmax renders them, with sync control.
+        val playerRenders = sub != null && method == PlayMethod.DIRECT_PLAY && !sub.isExternal && (isMpv || !sub.isTextSubtitle || cues == null)
+        if (playerRenders) {
             val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
             val ordinal = subtitleStreams.filter { !it.isExternal }.sortedBy { it.index }.indexOfFirst { it.index == sub.index }
             params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -342,11 +421,29 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
             restartAt(subtitle = index)
             return
         }
+        if (!isMpv && method == PlayMethod.DIRECT_PLAY && new != null && wantsMpv(new, app.settings.current.playerEngine)) {
+            subtitleIndex = new.index
+            switchToMpvAt = player.currentPosition
+            return
+        }
         subtitleIndex = new?.index
         clearPreview()
         applyTrackOverrides(player.currentTracks)
         loadCues()
         reportProgress()
+    }
+
+    /** Audio and subtitles at once; a converted stream restarts only once for both. -1 turns subtitles off. */
+    fun selectTracks(audio: Int, subtitle: Int) {
+        val old = currentSubtitle
+        val new = subtitleStreams.firstOrNull { it.index == subtitle }
+        val subNeedsServer = (new != null && !new.isTextSubtitle) || (old != null && !old.isTextSubtitle)
+        if (method != PlayMethod.DIRECT_PLAY && (audio != audioIndex || subNeedsServer)) {
+            restartAt(audio = audio, subtitle = subtitle)
+            return
+        }
+        selectAudio(audio)
+        selectSubtitle(subtitle)
     }
 
     private fun restartAt(audio: Int? = audioIndex, subtitle: Int? = subtitleIndex ?: -1) {
@@ -362,8 +459,10 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
         cueJob?.cancel()
         cues = null
         timing = Timing()
+        applyTrackOverrides(player.currentTracks)
         val sub = currentSubtitle ?: return
         if (!sub.isTextSubtitle) return
+        if (isMpv && !sub.isExternal && method == PlayMethod.DIRECT_PLAY) return // mpv draws it
         val itemId = item?.id ?: return
         val sourceId = source?.id ?: return
         cuesLoading = true
@@ -371,12 +470,16 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
             runCatching { app.subtitles.cues(session, itemId, sourceId, sub.index) }
                 .onSuccess {
                     cues = CueTrack(it)
+                    applyTrackOverrides(player.currentTracks) // finmax takes over from the player
                     app.subtitles.rememberedTiming(itemId, sub.syncKey())?.let { t ->
                         timing = t
                         notice = "Using your saved sync for this subtitle (${describe(t)})"
                     }
                 }
-                .onFailure { notice = "Couldn't load subtitles: ${friendlyError(it)}" }
+                .onFailure {
+                    // Embedded ones keep showing through the player; only say so when nothing shows.
+                    if (sub.isExternal || method != PlayMethod.DIRECT_PLAY) notice = "Couldn't load subtitles: ${friendlyError(it)}"
+                }
             cuesLoading = false
         }
     }
@@ -384,6 +487,7 @@ class PlayerController(context: Context, private val app: FinmaxApp, private val
     /** Sets the live correction and remembers it for this media + subtitle. */
     fun applyTiming(t: Timing) {
         timing = t
+        (player as? MpvPlayer)?.subDelayMs = t.offsetMs
         val sub = currentSubtitle ?: return
         item?.id?.let { app.subtitles.rememberTiming(it, sub.syncKey(), t) }
     }

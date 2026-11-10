@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.view.KeyEvent
 import com.finmax.ui.Navigator
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -173,18 +174,18 @@ fun PillButton(
         modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(ButtonShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (primary) Fm.Amethyst else Color.White.copy(alpha = 0.09f),
-            contentColor = if (primary) Fm.Mist else Fm.Text,
+            // Every button rests on the same translucent fill and turns white when focused.
+            containerColor = Color.White.copy(alpha = 0.08f),
+            contentColor = Fm.Text,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
             disabledContainerColor = Color.White.copy(alpha = 0.04f),
             disabledContentColor = Fm.TextFaint,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.55f), 14.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {
         Row(
-            Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
+            Modifier.height(ButtonHeight).padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -196,7 +197,7 @@ fun PillButton(
 
 /**
  * Editorial text action ("LEARN MORE  ⟶" in the reference art): tracked uppercase label with a
- * hairline arrow. No fill until focused, then the parchment focus fill.
+ * hairline arrow, on the same translucent fill as the icon buttons.
  */
 @Composable
 fun GhostButton(
@@ -211,24 +212,21 @@ fun GhostButton(
         modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(ButtonShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
+            // Same translucent fill as IconButton and the secondary pills.
+            containerColor = Color.White.copy(alpha = 0.08f),
             contentColor = Fm.Text,
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
         ),
-        border = ClickableSurfaceDefaults.border(
-            border = Border(BorderStroke(1.dp, Fm.Text.copy(alpha = 0.28f)), shape = ButtonShape),
-            focusedBorder = Border(BorderStroke(1.dp, Fm.Focus), shape = ButtonShape),
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
+            Modifier.height(ButtonHeight).padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (icon != null) Icon(icon, null, Modifier.size(17.dp))
-            Text(text.uppercase(), style = MaterialTheme.typography.labelLarge, letterSpacing = 1.2.sp, maxLines = 1)
+            if (icon != null) Icon(icon, null, Modifier.size(18.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
             if (arrow) {
                 Box(Modifier.padding(start = 4.dp).width(22.dp).height(1.dp).background(LocalContentColor.current))
             }
@@ -236,8 +234,12 @@ fun GhostButton(
     }
 }
 
+/** Height shared by every pill and icon button, so a row of actions lines up. */
+val ButtonHeight = 44.dp
+
+/** Round icon action, [size] across (pills' height by default; the top bar uses its tabs' height). */
 @Composable
-fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, active: Boolean = false) {
+fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, active: Boolean = false, size: Dp = ButtonHeight) {
     Surface(
         onClick = onClick,
         modifier = modifier,
@@ -248,9 +250,11 @@ fun IconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
             focusedContainerColor = Fm.Focus,
             focusedContentColor = Fm.OnFocus,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.15f),
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.padding(10.dp).size(22.dp))
+        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(size * 0.5f))
+        }
     }
 }
 
@@ -263,6 +267,7 @@ fun FocusTile(
     focusedScale: Float = 1.07f,
     onFocused: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    glow: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Surface(
@@ -273,7 +278,7 @@ fun FocusTile(
         colors = ClickableSurfaceDefaults.colors(containerColor = Fm.Surface, focusedContainerColor = Fm.SurfaceHigh),
         scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Fm.Focus), shape = shape)),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.6f), 16.dp)),
+        glow = if (glow) ClickableSurfaceDefaults.glow(focusedGlow = Glow(Fm.Amethyst.copy(alpha = 0.6f), 16.dp)) else ClickableSurfaceDefaults.glow(),
         content = content,
     )
 }
@@ -301,6 +306,8 @@ fun MediaCard(
     onFocused: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     overlayText: Boolean = true,
+    focusedScale: Float = 1.07f,
+    glow: Boolean = true,
 ) {
     val repo = LocalMediaRepo.current ?: FinmaxApp.instance.repo
     val url = remember(item.id, style) { if (style == CardStyle.LANDSCAPE) repo.landscape(item) else repo.poster(item) }
@@ -313,6 +320,8 @@ fun MediaCard(
         onClick = onClick,
         onFocused = onFocused,
         onLongClick = onLongClick,
+        focusedScale = focusedScale,
+        glow = glow,
         modifier = modifier.width(width).aspectRatio(if (style == CardStyle.LANDSCAPE) 16f / 9f else 2f / 3f),
     ) {
         if (url != null) {
@@ -349,7 +358,7 @@ fun MediaCard(
         }
         if (item.userData?.played == true) {
             Icon(
-                Icons.Filled.CheckCircle, "Watched", tint = Fm.Accent,
+                Ic.CheckCircle, "Watched", tint = Fm.Accent,
                 modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(18.dp).background(Fm.Bg, CircleShape),
             )
         }
@@ -383,6 +392,7 @@ fun MediaRow(
     onFocused: ((BaseItemDto) -> Unit)? = null,
     initialFocus: Boolean = false,
     showTitle: Boolean = true,
+    cardWidth: Dp? = null,
 ) {
     val nav = com.finmax.ui.LocalNav.current
     Column(modifier) {
@@ -397,6 +407,7 @@ fun MediaRow(
                 MediaCard(
                     item = item,
                     style = style,
+                    width = cardWidth ?: if (style == CardStyle.LANDSCAPE) 248.dp else 140.dp,
                     onClick = { onOpen(item) },
                     onFocused = { onFocused?.invoke(item) },
                     modifier = Modifier.focusMemory("$rowKey/${item.id}", initial = initialFocus && item == items.first()).playKey(item, nav),
@@ -501,27 +512,44 @@ fun GlassBackdrop(
     textSide: Alignment.Horizontal = Alignment.Start,
     dim: Float = 0f,
     sharp: @Composable BoxScope.() -> Unit = {},
+    blur: Dp = 42.dp,
+    /** How far past the default the glass reaches into the art, as a fraction of the width. */
+    reach: Float = 0f,
+    /** 0..1: lifts the glass so the sharp layer (a video) fills the screen, for the hand-off to the player. */
+    clear: Float = 0f,
+    /**
+     * The glass is a blurred copy of what's actually behind it (art or a playing video, drawn twice)
+     * instead of a separate blurred still, so a video never sits under the still's blur.
+     */
+    live: Boolean = false,
+    /** 0..1: the sharp picture dissolves fully into the glass (the page scrolled past its header). */
+    frost: Float = 0f,
 ) {
     Box(modifier.fillMaxSize().background(Fm.Bg)) {
         if (url == null) {
             BrandBackdrop()
             return@Box
         }
+        if (live) {
+            LiveGlass(url, textSide, dim, sharp, blur, reach, clear, frost)
+            return@Box
+        }
         // 1. Blurred copy fills the screen: the "glass" the text sits on.
-        AsyncImage(soft ?: url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(42.dp))
+        AsyncImage(soft ?: url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(blur))
         Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = 0.42f)))
         // Deeper tint where the text sits, so light artwork still reads (still glass, not black).
         val shade = if (textSide == Alignment.End) {
-            Brush.horizontalGradient(0.45f to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f))
+            Brush.horizontalGradient((0.45f - reach) to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f))
         } else {
-            Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f), 0.6f to Color.Transparent)
+            Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f), (0.6f + reach) to Color.Transparent)
         }
         Box(Modifier.fillMaxSize().background(shade))
         // 2. Sharp art, masked so it dissolves into the glass toward the text side.
+        val glass = Color.Black.copy(alpha = clear)
         val fade = if (textSide == Alignment.End) {
-            Brush.horizontalGradient(0.38f to Color.Black, 0.78f to Color.Transparent)
+            Brush.horizontalGradient((0.38f - reach) to Color.Black, (0.78f - reach) to glass)
         } else {
-            Brush.horizontalGradient(0.3f to Color.Transparent, 0.7f to Color.Black)
+            Brush.horizontalGradient((0.3f + reach) to glass, (0.7f + reach) to Color.Black)
         }
         Box(
             Modifier.fillMaxSize()
@@ -529,15 +557,58 @@ fun GlassBackdrop(
                 .drawWithContent {
                     drawContent()
                     drawRect(fade, blendMode = BlendMode.DstIn)
-                    drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                    drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to glass), blendMode = BlendMode.DstIn)
                 },
         ) {
             AsyncImage(url, null, contentScale = ContentScale.Crop, alignment = Alignment.Center, modifier = Modifier.fillMaxSize())
             sharp()
         }
         // 3. A whisper of shade at the very top keeps the top bar legible on bright art.
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.35f * (1f - clear)), 0.2f to Color.Transparent)))
         if (dim > 0f) Box(Modifier.fillMaxSize().background(Fm.Bg.copy(alpha = dim)))
+    }
+}
+
+/** [GlassBackdrop] with live glass: art and video are recorded once and drawn blurred, then sharp and masked. */
+@Composable
+private fun LiveGlass(
+    url: String, textSide: Alignment.Horizontal, dim: Float, sharp: @Composable BoxScope.() -> Unit,
+    blur: Dp, reach: Float, clear: Float, frost: Float,
+) {
+    val glassLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val sharpLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val blurPx = with(androidx.compose.ui.platform.LocalDensity.current) { blur.toPx() }
+    val right = textSide == Alignment.End
+    Box(
+        Modifier.fillMaxSize().drawWithContent {
+            // 1. The glass: everything below (still or video), blurred, tinted deeper under the text.
+            glassLayer.renderEffect = androidx.compose.ui.graphics.BlurEffect(blurPx, blurPx, androidx.compose.ui.graphics.TileMode.Clamp)
+            glassLayer.alpha = 1f - clear
+            glassLayer.record { this@drawWithContent.drawContent() }
+            drawLayer(glassLayer)
+            drawRect(Fm.Bg.copy(alpha = 0.42f * (1f - clear)))
+            drawRect(
+                if (right) Brush.horizontalGradient((0.45f - reach) to Color.Transparent, 1f to Fm.Bg.copy(alpha = 0.5f * (1f - clear)))
+                else Brush.horizontalGradient(0f to Fm.Bg.copy(alpha = 0.5f * (1f - clear)), (0.6f + reach) to Color.Transparent),
+            )
+            // 2. The same picture sharp, dissolving into the glass toward the text (and away entirely with frost).
+            val glass = Color.Black.copy(alpha = clear)
+            val fade = if (right) Brush.horizontalGradient((0.38f - reach) to Color.Black, (0.78f - reach) to glass)
+                else Brush.horizontalGradient((0.3f + reach) to glass, (0.7f + reach) to Color.Black)
+            sharpLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+            sharpLayer.alpha = 1f - frost
+            sharpLayer.record {
+                this@drawWithContent.drawContent()
+                drawRect(fade, blendMode = BlendMode.DstIn)
+                drawRect(Brush.verticalGradient(0.62f to Color.Black, 1f to glass), blendMode = BlendMode.DstIn)
+            }
+            if (frost < 1f) drawLayer(sharpLayer)
+            drawRect(Brush.verticalGradient(0f to Fm.Bg.copy(alpha = 0.35f * (1f - clear)), 0.2f to Color.Transparent))
+            if (dim > 0f) drawRect(Fm.Bg.copy(alpha = dim))
+        },
+    ) {
+        AsyncImage(url, null, contentScale = ContentScale.Crop, alignment = Alignment.Center, modifier = Modifier.fillMaxSize())
+        sharp()
     }
 }
 

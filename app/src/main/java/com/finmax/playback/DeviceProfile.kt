@@ -22,6 +22,8 @@ class DeviceCapabilities private constructor(
     val video: Set<String>,
     val audio: Set<String>,
     val dolbyVision: Boolean,
+    /** Largest AV1 frame a decoder here takes (this box only has Android's software one, ~1080p). */
+    val av1Max: Pair<Int, Int>?,
 ) {
     fun summary() = (video.sorted() + audio.sorted()).joinToString(", ") + if (dolbyVision) ", Dolby Vision" else ""
 
@@ -52,7 +54,14 @@ class DeviceCapabilities private constructor(
                 if (caps.supportsEncoding(C.ENCODING_E_AC3) || caps.supportsEncoding(C.ENCODING_E_AC3_JOC)) audio += "eac3"
                 if (caps.supportsEncoding(C.ENCODING_DTS) || caps.supportsEncoding(C.ENCODING_DTS_HD)) audio += "dts"
                 if (caps.supportsEncoding(C.ENCODING_DOLBY_TRUEHD)) audio += "truehd"
-                DeviceCapabilities(video, audio, "video/dolby-vision" in types).also { cached = it }
+                // Whatever the hardware lacks, the players' FFmpeg audio decoder handles; without these the
+                // server would remux just to convert the audio, and that stream carries no subtitles.
+                audio += listOf("ac3", "eac3", "dts", "truehd")
+                val av1Max = decoders.filter { "video/av01" in it.supportedTypes.map(String::lowercase) }
+                    .mapNotNull { runCatching { it.getCapabilitiesForType("video/av01").videoCapabilities }.getOrNull() }
+                    .maxByOrNull { it.supportedWidths.upper * it.supportedHeights.upper }
+                    ?.let { it.supportedWidths.upper to it.supportedHeights.upper }
+                DeviceCapabilities(video, audio, "video/dolby-vision" in types, av1Max).also { cached = it }
             }
         }
     }
@@ -103,6 +112,17 @@ fun buildFinmaxProfile(caps: DeviceCapabilities, maxBitrate: Int): DeviceProfile
         audioCodec("mp3")
     }
 
+    // Bigger AV1 than the decoder takes (4K on this box): the server converts it instead of failing.
+    caps.av1Max?.let { (w, h) ->
+        codecProfile {
+            type = CodecType.VIDEO
+            codec = "av1"
+            conditions {
+                lowerThanOrEquals(ProfileConditionValue.WIDTH, w)
+                lowerThanOrEquals(ProfileConditionValue.HEIGHT, h)
+            }
+        }
+    }
     // Hardware H.264 decoders on TV SoCs are 8-bit only (Hi10P would fail or stutter).
     codecProfile {
         type = CodecType.VIDEO

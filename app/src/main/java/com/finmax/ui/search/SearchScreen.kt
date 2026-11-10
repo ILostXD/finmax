@@ -1,5 +1,7 @@
 package com.finmax.ui.search
 
+import com.finmax.ui.components.Ic
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,6 +94,39 @@ private class SearchState(private val repo: MediaRepository) : ScreenState() {
     }
 }
 
+/** The on-screen keyboard and query field (Search, and Discover's search). */
+@Composable
+fun SearchKeyboard(query: String, onQuery: (String) -> Unit, hint: String) {
+    Column(Modifier.width(276.dp)) {
+        Box(
+            Modifier.fillMaxWidth().height(48.dp).background(Fm.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                query.ifEmpty { hint },
+                style = MaterialTheme.typography.titleMedium,
+                color = if (query.isEmpty()) Fm.TextFaint else Fm.Text,
+                maxLines = 1,
+            )
+        }
+        // Every row spans the field's width with the same 6 dp gaps, so the keys line up with it.
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Key(Modifier.weight(1f), "space", icon = Ic.Space) { onQuery(query + " ") }
+            Key(Modifier.weight(1f), "delete", icon = Ic.Backspace) { onQuery(query.dropLast(1)) }
+        }
+        keys.chunked(6).forEachIndexed { r, row ->
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { k ->
+                    Key(Modifier.weight(1f).focusMemory("k/$k", initial = r == 0 && k == "a"), k) { onQuery(query + k) }
+                }
+            }
+        }
+        if (query.isNotEmpty()) {
+            Key(Modifier.padding(top = 6.dp).fillMaxWidth(), "Clear") { onQuery("") }
+        }
+    }
+}
+
 private val keys = ("abcdefghijklmnopqrstuvwxyz1234567890").map { it.toString() }
 
 @Composable
@@ -101,33 +136,7 @@ fun SearchScreen() {
     Column(Modifier.fillMaxSize()) {
         TopBar(Route.Search)
         Row(Modifier.fillMaxSize().padding(start = Fm.SafeH, top = 8.dp)) {
-            Column(Modifier.width(276.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().height(48.dp).background(Fm.Surface, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text(
-                        state.query.ifEmpty { "Search titles" },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (state.query.isEmpty()) Fm.TextFaint else Fm.Text,
-                        maxLines = 1,
-                    )
-                }
-                Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Key(Modifier.width(135.dp), "space", icon = Icons.Filled.SpaceBar) { state.set(state.query + " ") }
-                    Key(Modifier.width(135.dp), "delete", icon = Icons.AutoMirrored.Filled.Backspace) { state.set(state.query.dropLast(1)) }
-                }
-                keys.chunked(6).forEachIndexed { r, row ->
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { k ->
-                            Key(Modifier.size(40.dp).focusMemory("k/$k", initial = r == 0 && k == "a"), k) { state.set(state.query + k) }
-                        }
-                    }
-                }
-                if (state.query.isNotEmpty()) {
-                    Key(Modifier.padding(top = 10.dp).width(276.dp), "Clear") { state.set("") }
-                }
-            }
+            SearchKeyboard(state.query, state::set, "Search titles")
             val showing = if (state.query.isBlank()) state.suggestions else state.results
             LazyVerticalGrid(
                 state = state.grid,

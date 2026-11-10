@@ -1,5 +1,6 @@
 package com.finmax.data
 
+import org.jellyfin.sdk.api.client.extensions.playlistsApi
 import org.jellyfin.sdk.api.client.extensions.genresApi
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -60,7 +61,7 @@ class MediaRepository(private val session: Session) {
     private val detailFields = cardFields + listOf(
         ItemFields.PEOPLE, ItemFields.STUDIOS, ItemFields.TAGLINES, ItemFields.MEDIA_SOURCES,
         ItemFields.MEDIA_STREAMS, ItemFields.PROVIDER_IDS, ItemFields.PATH, ItemFields.EXTERNAL_URLS,
-        ItemFields.REMOTE_TRAILERS,
+        ItemFields.REMOTE_TRAILERS, ItemFields.TRICKPLAY, ItemFields.PRODUCTION_LOCATIONS,
     )
 
     suspend fun views(): List<BaseItemDto> =
@@ -81,8 +82,19 @@ class MediaRepository(private val session: Session) {
     suspend fun recommendations(): List<RecommendationDto> =
         api.moviesApi.getMovieRecommendations(userId = userId, fields = cardFields, categoryLimit = 3, itemLimit = 16).content
 
+    /** Server genres with duplicates (Sci-Fi / Science Fiction, ...) merged under one name. */
     suspend fun genres(parentId: UUID?): List<BaseItemDto> =
         api.genresApi.getGenres(userId = userId, parentId = parentId, sortBy = listOf(ItemSortBy.SORT_NAME)).content.items
+            .filter { it.name != null }
+            .groupBy { genreName(it.name!!) }
+            .map { (name, group) ->
+                genreMembers[name] = group.mapNotNull { it.name }.toSet()
+                group.first().copy(name = name)
+            }
+            .sortedBy { it.name }
+
+    /** Real server names behind each merged genre, so browsing one finds all of them. */
+    private val genreMembers = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
 
     suspend fun items(
         parentId: UUID? = null,
@@ -94,6 +106,7 @@ class MediaRepository(private val session: Session) {
         start: Int = 0,
         limit: Int = 60,
         recursive: Boolean = true,
+        personIds: List<UUID>? = null,
     ): BaseItemDtoQueryResult = api.itemsApi.getItems(
         GetItemsRequest(
             userId = userId,
@@ -103,8 +116,9 @@ class MediaRepository(private val session: Session) {
             sortBy = listOf(sort.by, ItemSortBy.SORT_NAME),
             sortOrder = listOf(sort.order, SortOrder.ASCENDING),
             filters = listOfNotNull(filter.filter),
-            genres = genre?.let { listOf(it) },
+            genres = genre?.let { (genreMembers[it] ?: setOf(it)).toList() },
             searchTerm = search,
+            personIds = personIds,
             startIndex = start,
             limit = limit,
             fields = cardFields,
@@ -137,6 +151,34 @@ class MediaRepository(private val session: Session) {
     suspend fun collectionItems(id: UUID): List<BaseItemDto> =
         items(parentId = id, sort = SortChoice.RELEASED, recursive = false, limit = 100).items.sortedBy { it.premiereDate }
 
+    // ---- Playlists ---------------------------------------------------------------------------
+
+    /** The user's video playlists (music ones are left out: finmax doesn't play music). */
+    suspend fun playlists(): List<BaseItemDto> =
+        items(types = listOf(BaseItemKind.PLAYLIST), sort = SortChoice.NAME, limit = 100).items
+            .filter { it.mediaType != org.jellyfin.sdk.model.api.MediaType.AUDIO }
+
+    suspend fun playlistItems(id: UUID): List<BaseItemDto> =
+        api.playlistsApi.getPlaylistItems(playlistId = id, userId = userId, fields = cardFields + ItemFields.MEDIA_SOURCES, enableUserData = true)
+            .content.items
+
+    suspend fun addToPlaylist(playlistId: UUID, itemId: UUID) {
+        api.playlistsApi.addItemToPlaylist(playlistId = playlistId, ids = listOf(itemId), userId = userId)
+    }
+
+    suspend fun createPlaylist(name: String, itemId: UUID): UUID? =
+        api.playlistsApi.createPlaylist(
+            org.jellyfin.sdk.model.api.CreatePlaylistDto(
+                name = name, ids = listOf(itemId), userId = userId, mediaType = org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                users = emptyList(), isPublic = false,
+            ),
+        ).content.id?.let { runCatching { UUID.fromString(it.replace(Regex("(.{8})(.{4})(.{4})(.{4})(.{12})"), "$1-$2-$3-$4-$5")) }.getOrNull() }
+
+    /** [entryId] is the item's playlistItemId (the same title can be in a playlist twice). */
+    suspend fun removeFromPlaylist(playlistId: UUID, entryId: String) {
+        api.playlistsApi.removeItemFromPlaylist(playlistId = playlistId.toString(), entryIds = listOf(entryId))
+    }
+
     suspend fun setFavorite(id: UUID, favorite: Boolean) = if (favorite) {
         api.userLibraryApi.markFavoriteItem(itemId = id, userId = userId).content.isFavorite
     } else {
@@ -153,7 +195,8 @@ class MediaRepository(private val session: Session) {
 
     /** Random movies and shows that have widescreen art, for the Home carousel. */
     suspend fun featured(limit: Int = 8): List<BaseItemDto> = items(
-        types = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), sort = SortChoice.RANDOM, limit = limit * 3,
+        // Unwatched only: the carousel suggests something new (a series counts until every episode is played).
+        types = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), sort = SortChoice.RANDOM, filter = FilterChoice.UNWATCHED, limit = limit * 3,
     ).items.filter { !it.backdropImageTags.isNullOrEmpty() }.take(limit)
 
     /** Trailers stored next to the media on the server (remote YouTube trailers can't be played here). */
@@ -199,9 +242,17 @@ class MediaRepository(private val session: Session) {
         image(item.id, ImageType.LOGO, item.imageTags?.get(ImageType.LOGO), width)
             ?: item.parentLogoItemId?.let { image(it, ImageType.LOGO, item.parentLogoImageTag, width) }
 
-    fun personImage(id: UUID, tag: String?) = image(id, ImageType.PRIMARY, tag, 300)
+    fun personImage(id: UUID, tag: String?, width: Int = 300) = image(id, ImageType.PRIMARY, tag, width)
 
     fun userImage(): String? = session.user.imageTag?.let {
         "${session.server.url.trimEnd('/')}/Users/${session.user.userId}/Images/Primary?tag=$it&maxWidth=120"
     }
 }
+
+private val genreAliases = mapOf(
+    "science fiction" to "Sci-Fi", "sci-fi" to "Sci-Fi", "scifi" to "Sci-Fi", "sci fi" to "Sci-Fi", "science-fiction" to "Sci-Fi",
+    "documentaries" to "Documentary",
+)
+
+/** The one name shown for a genre that servers spell several ways. */
+internal fun genreName(name: String): String = genreAliases[name.trim().lowercase()] ?: name

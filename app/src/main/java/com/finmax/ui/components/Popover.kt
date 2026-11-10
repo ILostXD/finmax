@@ -22,6 +22,10 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
@@ -82,6 +86,7 @@ fun Modifier.popoverBlur(active: Boolean, width: Dp = 360.dp): Modifier {
 fun Popover(title: String, width: Dp = 360.dp, content: @Composable () -> Unit) {
     val req = remember { FocusRequester() }
     var hasFocus by remember { mutableStateOf(false) }
+    val back = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     LaunchedEffect(Unit) {
         repeat(10) {
             delay(60)
@@ -107,6 +112,15 @@ fun Popover(title: String, width: Dp = 360.dp, content: @Composable () -> Unit) 
                 .padding(start = 8.dp, end = Fm.SafeH - 8.dp, top = Fm.SafeV, bottom = Fm.SafeV)
                 .focusRequester(req)
                 .onFocusChanged { hasFocus = it.hasFocus }
+                // Back goes straight to the page's back handler: left to Compose, the first press only
+                // moves focus out of this group and a second one is needed to close.
+                .onPreviewKeyEvent { e ->
+                    if (e.key != androidx.compose.ui.input.key.Key.Back) return@onPreviewKeyEvent false
+                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyUp) back?.onBackPressed()
+                    true
+                }
+                // The D-pad can't leave the menu for the page behind it.
+                .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup(),
         ) {
             Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 12.dp, bottom = 18.dp))
@@ -148,7 +162,7 @@ fun PopoverItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
         ) {
-            val lead = icon ?: if (primary) androidx.compose.material.icons.Icons.Filled.Check else null
+            val lead = icon ?: if (primary) Ic.Check else null
             if (lead != null) {
                 androidx.tv.material3.Icon(lead, null, Modifier.padding(0.dp).width(18.dp))
             } else {

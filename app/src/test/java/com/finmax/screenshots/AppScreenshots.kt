@@ -131,17 +131,20 @@ class AppScreenshots {
     @Test fun pages() {
         signIn()
         // Background video needs ExoPlayer, which never settles here; the artwork is what shows first anyway.
-        app.settings.update { it.copy(detailVideo = com.finmax.data.DetailVideo.OFF) }
+        // The test clock skips straight through the idle timer, and the screensaver never settles.
+        app.settings.update { it.copy(detailVideo = com.finmax.data.DetailVideo.OFF, screensaverMin = 0) }
+        // Home's carousel timer restarts forever, so the clock only moves in settle().
+        compose.mainClock.autoAdvance = false
         val nav = Navigator()
         compose.setContent { App { MainNavigation(nav) } }
 
         shot("10-home")
-        key(Key.DirectionDown)
-        shot("11-home-next-slide")
         key(Key.DirectionRight, 3)
-        shot("12-home-recommendations")
-        key(Key.DirectionDown, 4)
-        shot("13-home-recommendations-scrolled")
+        shot("11-home-next-slide")
+        key(Key.DirectionDown)
+        shot("12-home-rows")
+        key(Key.DirectionDown, 2)
+        shot("13-home-rows-scrolled")
 
         go(nav, Route.Movies); shot("20-movies")
         key(Key.DirectionRight, 2); key(Key.DirectionCenter); shot("20b-movies-genre-picker")

@@ -37,6 +37,7 @@ import com.finmax.ui.detail.DetailState
 import com.finmax.ui.home.HomeContent
 import com.finmax.ui.home.HomeSection
 import com.finmax.ui.home.HomeState
+import com.finmax.ui.home.RowKind
 import com.finmax.ui.theme.FinmaxTheme
 import com.finmax.ui.theme.Fm
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -225,30 +226,28 @@ class DesignScreenshots {
         compose.onRoot().captureRoboImage(File(out, "$name.png").path)
     }
 
-    private fun homeState(exploring: Boolean) = HomeState(repo, autoLoad = false).apply {
+    private fun homeState(inRows: Boolean) = HomeState(repo, autoLoad = false).apply {
         featured = listOf(sandborne, lastLaugh, item("Northern Lights", year = 2023))
+        sections.add(HomeSection(-20, "genres", "Genres", listOf("Action", "Comedy", "Crime", "Sci-Fi", "Documentary", "Thriller", "Animation").map { item(it) }, RowKind.GENRES))
+        sections.add(HomeSection(-10, "nextwatch", "Your Next Watch", listOf(sandborne, lastLaugh, item("Paper Satellites"), item("Kingfisher"), item("A Room Upstairs"), item("Low Tide"), item("The Glass Orchard")), RowKind.POSTER))
         sections.add(HomeSection(0, "resume", "Continue Watching", listOf(lastLaugh.withProgress(42.0), item("The Glass Orchard", progress = 70.0), item("Low Tide", progress = 15.0))))
         sections.add(HomeSection(1, "nextup", "Next Up", listOf(episode("Night Shift", 2, 4, "The Long Hallway"), episode("Copperline", 1, 7, "Signal Fires"))))
-        sections.add(HomeSection(10, "latest", "New in Movies", listOf(sandborne, item("Paper Satellites"), item("Kingfisher"), item("A Room Upstairs"))))
-        this.exploring = exploring
-        if (exploring) {
-            focused = lastLaugh
-            focusedSection = "Continue Watching"
-        }
+        this.inRows = inRows
+        if (inRows) focused = lastLaugh
     }
 
     private fun BaseItemDto.withProgress(p: Double) = copy(userData = userData?.copy(playedPercentage = p, playbackPositionTicks = 1))
 
     @Test fun home_stage() {
-        val state = homeState(exploring = false)
+        val state = homeState(inRows = false)
         compose.setContent { Frame { HomeContent(state, repo) } }
         shot("home-stage")
     }
 
-    @Test fun home_explore() {
-        val state = homeState(exploring = true)
+    @Test fun home_rows() {
+        val state = homeState(inRows = true)
         compose.setContent { Frame { HomeContent(state, repo) } }
-        shot("home-explore")
+        shot("home-rows")
     }
 
     private fun detailState(item: BaseItemDto) = DetailState(repo, item.id, autoLoad = false).apply {

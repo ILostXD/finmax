@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,9 +22,12 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
@@ -44,16 +48,10 @@ import com.finmax.ui.LocalNav
 import com.finmax.ui.Route
 import com.finmax.ui.theme.Fm
 
-/** The finmax wordmark (brand art in res/drawable-nodpi), tinted parchment by default. */
+/** The finmax wordmark: soft grey-to-amethyst lettering (brand art in res/drawable-nodpi, trimmed tight). */
 @Composable
-fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier, gradient: Boolean = false, tint: Color = Fm.Mist) {
-    Image(
-        painterResource(if (gradient) R.drawable.finmax_wordmark_gradient else R.drawable.finmax_wordmark),
-        contentDescription = "finmax",
-        colorFilter = if (gradient) null else ColorFilter.tint(tint),
-        // The wordmark's x-height sits low in its box; lift it so it lines up with text beside it.
-        modifier = modifier.offset(y = -height * 0.14f).height(height),
-    )
+fun Wordmark(height: Dp = 22.dp, modifier: Modifier = Modifier) {
+    Image(painterResource(R.drawable.finmax_wordmark_frost), contentDescription = "finmax", modifier = modifier.height(height))
 }
 
 private val tabs = listOf(
@@ -68,17 +66,24 @@ private val tabs = listOf(
 @Composable
 fun TopBar(current: Route.Tab, modifier: Modifier = Modifier) {
     val nav = LocalNav.current
-    Box(modifier.fillMaxWidth().padding(start = Fm.SafeH, end = Fm.SafeH, top = Fm.SafeV, bottom = 6.dp)) {
-        Wordmark(20.dp, Modifier.align(Alignment.CenterStart))
+    // Top padding puts the wordmark's centre where the details page has it.
+    Box(modifier.fillMaxWidth().padding(start = Fm.SafeH, end = Fm.SafeH, top = TopBarTop, bottom = 6.dp)) {
+        Wordmark(20.dp, Modifier.align(Alignment.CenterStart).offset(y = -LogoLift))
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
             tabs.forEach { (route, label) ->
                 TabItem(label, selected = current == route) { nav.tab(route) }
             }
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(Icons.Filled.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search)
+            IconButton(Ic.Search, "Search", { nav.tab(Route.Search) }, active = current == Route.Search, size = TabHeight)
             Spacer(Modifier.width(10.dp))
-            IconButton(Icons.Filled.Settings, "Settings", { nav.tab(Route.Settings) }, active = current == Route.Settings)
+            Box {
+                IconButton(Ic.Settings, "Settings", { nav.tab(Route.Settings) }, active = current == Route.Settings, size = TabHeight)
+                // An app update is waiting (Settings → About & updates).
+                if (com.finmax.update.Updater.available != null) {
+                    Box(Modifier.align(Alignment.TopEnd).size(9.dp).background(Fm.Accent, CircleShape))
+                }
+            }
             Spacer(Modifier.width(10.dp))
             Avatar { nav.push(Route.Profiles) }
         }
@@ -104,7 +109,7 @@ private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
             Text(
                 label, style = MaterialTheme.typography.titleSmall,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                modifier = Modifier.height(TabHeight).wrapContentHeight().padding(horizontal = 16.dp),
             )
             if (selected) {
                 Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(width = 14.dp, height = 2.dp).background(Fm.Accent, CircleShape))
@@ -113,32 +118,51 @@ private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Top padding of the bar, shared with pages that place content under it. */
+val TopBarTop = 20.dp
+
+/** How far the wordmark sits above the line the rest of a top bar centres on (same on every page). */
+val LogoLift = 2.dp
+
+/** A tab pill's height (label plus its padding); the bar's round actions match it. */
+private val TabHeight = 38.dp
+
+/** The picture fills the circle (no grey ring); focus draws a white ring inside it, so it never grows. */
 @Composable
 private fun Avatar(onClick: () -> Unit) {
     val url = runCatching { FinmaxApp.instance.repo.userImage() }.getOrNull()
+    var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(CircleShape),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.Focus),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Fm.SurfaceHigh, focusedContainerColor = Fm.SurfaceHigh),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        modifier = Modifier.onFocusChanged { focused = it.isFocused },
     ) {
-        Box(Modifier.size(40.dp).padding(3.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(TabHeight).clip(CircleShape), contentAlignment = Alignment.Center) {
             if (url != null) {
-                AsyncImage(url, "Profile", contentScale = ContentScale.Crop, modifier = Modifier.size(34.dp).clip(CircleShape))
+                AsyncImage(url, "Profile", contentScale = ContentScale.Crop, modifier = Modifier.size(TabHeight))
             } else {
-                Icon(Icons.Filled.Person, "Profile", Modifier.size(22.dp))
+                Icon(Ic.Person, "Profile", Modifier.size(20.dp))
             }
+            if (focused) Box(Modifier.size(TabHeight).border(2.5.dp, Fm.Focus, CircleShape))
         }
     }
 }
 
 /** Small "Movie • 2003 • 3h 20m • PG-13" style line used across hero, details and info strips. */
 @Composable
-fun MetaLine(parts: List<String>, modifier: Modifier = Modifier, color: Color = Fm.TextDim) {
+fun MetaLine(parts: List<String>, modifier: Modifier = Modifier, color: Color = Fm.TextDim, badge: String? = null) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        parts.filter { it.isNotBlank() }.forEachIndexed { i, p ->
+        val shown = parts.filter { it.isNotBlank() }
+        shown.forEachIndexed { i, p ->
             if (i > 0) Box(Modifier.size(3.dp).background(Fm.TextFaint, CircleShape))
             Text(p, style = MaterialTheme.typography.labelMedium, color = color)
+        }
+        // The age rating, outlined like everywhere else.
+        if (badge != null) {
+            if (shown.isNotEmpty()) Box(Modifier.size(3.dp).background(Fm.TextFaint, CircleShape))
+            Badge(badge)
         }
     }
 }

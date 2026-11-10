@@ -1,5 +1,6 @@
 package com.finmax
 
+import kotlinx.coroutines.launch
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -72,6 +73,7 @@ open class FinmaxApp : Application(), SingletonImageLoader.Factory {
         }
         sessions = SessionManager(this, jellyfin, secure)
         sessions.restore()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { runCatching { com.finmax.update.Updater.check() } }
         subtitles = SubtitleSources(this, http)
         bazarr = BazarrClient(http, settings)
         seerr = com.finmax.data.SeerrClient(http, settings)

@@ -12,8 +12,12 @@ android {
         applicationId = "com.finmax"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
+        // GitHub repo whose latest release is the app update (see update/Updater.kt).
+        // TV boxes are ARM; the emulator ABIs would double the APK (mpv and FFmpeg are native).
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+        buildConfigField("String", "UPDATE_REPO", "\"ILostXD/finmax\"")
     }
 
     buildTypes {
@@ -39,6 +43,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material:material-icons-extended")
+    // Lucide line icons (vector drawables), wrapped as ImageVectors in ui/components/Icons.kt.
+    implementation("com.composables:icons-lucide-android:2.2.1")
     implementation("androidx.tv:tv-material:1.0.0")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
@@ -47,6 +53,10 @@ dependencies {
     val media3 = "1.9.3"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    // Software AC3/E-AC3/DTS decoding: the Chromecast has no decoder for them, so previews were silent.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
+    // mpv, the second engine: real ASS/SSA subtitle rendering (styles, positions, embedded fonts).
+    implementation("dev.jdtech.mpv:libmpv:1.0.0")
     implementation("androidx.media3:media3-datasource-okhttp:$media3")
     implementation("androidx.media3:media3-ui:$media3")
     implementation("androidx.media3:media3-session:$media3")
